@@ -9,6 +9,13 @@ import logging
 
 import litellm
 from pydantic import BaseModel
+from tenacity import (
+    before_sleep_log,
+    retry,
+    retry_if_exception_type,
+    stop_after_attempt,
+    wait_exponential,
+)
 
 from onco_research_ai.config import settings
 
@@ -27,10 +34,20 @@ class _DropLiteLLMWorkerNoise(logging.Filter):
 
 logging.getLogger("asyncio").addFilter(_DropLiteLLMWorkerNoise())
 
+# Cuota gratuita de Groq (medida en las cabeceras x-ratelimit): 8 000 tokens/minuto y
+# 1 000 peticiones/día POR MODELO. Una respuesta con fuentes gasta ~3 000 tokens.
 MODEL = "groq/openai/gpt-oss-120b"
 FALLBACKS = ["groq/openai/gpt-oss-20b", "groq/qwen/qwen3.8-27b"]
 
 
+@retry(
+    # Límite por minuto: esperar y reintentar en vez de fallar (10 s, 20 s, 40 s, 60 s).
+    retry=retry_if_exception_type(litellm.RateLimitError),
+    wait=wait_exponential(multiplier=10, max=60),
+    stop=stop_after_attempt(5),
+    before_sleep=before_sleep_log(logging.getLogger(__name__), logging.WARNING),
+    reraise=True,
+)
 def complete(
     messages: list[dict],
     json_mode: bool = False,
@@ -45,7 +62,7 @@ def complete(
         max_tokens=max_tokens,
         reasoning_effort="low",
         response_format={"type": "json_object"} if json_mode else None,
-        num_retries=3,
+        num_retries=1,
         fallbacks=FALLBACKS,
     )
     return resp.choices[0].message.content or ""

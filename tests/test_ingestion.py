@@ -291,3 +291,33 @@ def test_best_per_doc_keeps_first_chunk_of_each_document():
         Hit("3", {"doc_id": "B"}, 1),
     ]
     assert [h.point_id for h in best_per_doc(hits)] == ["1", "3"]
+
+
+def test_manual_pdf_chunks_keep_page_and_drugs(tmp_path):
+    import re
+
+    import pymupdf
+
+    from onco_research_ai.ingestion.manual_pdfs import build_chunks
+
+    doc = pymupdf.open()
+    for text in [
+        "Encorafenib plus binimetinib: ORR 64% in 120 patients.",
+        "Safety of MK-3475 in melanoma.",
+    ]:
+        doc.new_page().insert_text((72, 72), text)
+    doc.save(tmp_path / "esmo_poster.pdf")
+    (tmp_path / "metadata.csv").write_text(
+        "file,title,congress,year,url\nesmo_poster.pdf,Poster X,ESMO,2025,\n"
+    )
+    patterns = [
+        (re.compile(r"(?<!\w)encorafenib(?!\w)", re.IGNORECASE), "encorafenib", "encorafenib"),
+        (re.compile(r"(?<!\w)mk-3475(?!\w)", re.IGNORECASE), "mk-3475", "pembrolizumab"),
+    ]
+    chunks = build_chunks(tmp_path, lambda t: len(t.split()), patterns)
+    assert [c.payload["page"] for c in chunks] == [1, 2]
+    assert chunks[0].payload["drugs"] == ["encorafenib"] and chunks[1].payload[
+        "drugs"
+    ] == ["pembrolizumab"]
+    assert chunks[0].text.startswith("Poster X (ESMO 2025), p. 1:")
+    assert chunks[0].payload["year"] == 2025

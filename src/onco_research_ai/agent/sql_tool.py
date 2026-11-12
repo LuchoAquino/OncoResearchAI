@@ -145,7 +145,21 @@ def run_sql_tool(question: str) -> SQLResult:
             result.sql, result.explanation = validate(draft.sql), draft.explanation
             result.columns, result.rows = execute(result.sql)
             result.error = None
-            return result
+            if result.rows or attempt == 1:
+                return result
+            # 0 filas: puede ser verdad o un SQL mal planteado (p. ej. exigir dos condiciones
+            # excluyentes en la MISMA fila). Un "no existe" falso es el peor error para un
+            # analista, así que se pide una revisión antes de aceptarlo.
+            messages += [
+                {"role": "assistant", "content": result.sql},
+                {
+                    "role": "user",
+                    "content": "The query returned 0 rows. Check the logic (e.g. "
+                    "conditions on different joined rows, wrong values, too strict filters). If it "
+                    "is correct, return the same query; otherwise fix it.",
+                },
+            ]
+            continue
         except Exception as exc:  # noqa: BLE001
             result.error = f"{exc.__class__.__name__}: {str(exc)[:300]}"
             logger.warning("SQL intento %d falló: %s", attempt + 1, result.error)

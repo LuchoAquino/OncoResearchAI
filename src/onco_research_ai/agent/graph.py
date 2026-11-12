@@ -176,6 +176,8 @@ def generate_node(state: State) -> State:
             },
         ]
     answer = complete(messages, temperature=0.1)
+    # Algunos modelos citan con corchetes chinos 【S1】: se normalizan para poder verificarlos.
+    answer = answer.replace("【", "[").replace("】", "]")
     return {
         "answer": answer,
         "context": context,
@@ -199,6 +201,7 @@ def after_verify(state: State) -> str:
     needs_retry = (
         c["invalid"]
         or c["unsupported_numbers"]
+        or not c["cited"]
         or (c["n_sentences"] and len(c["uncited_sentences"]) > c["n_sentences"] / 2)
     )
     has_evidence = state.get("sources") or state.get("sql")
@@ -250,6 +253,7 @@ def ask(question: str) -> dict:
         "sources": sources,
         "cited_sources": [s for s in sources if s["ref"] in cited],
         "check": state.get("check", {}),
+        "context": state.get("context", ""),  # lo que vio el LLM (para auditar/evaluar)
         "attempts": state.get("attempts", 0),
         "timings": {**state.get("timings", {}), "total": time.time() - t},
     }

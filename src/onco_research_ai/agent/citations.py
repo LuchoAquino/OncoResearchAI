@@ -82,7 +82,9 @@ def check_citations(
     sentences = [
         s.strip()
         for s in re.split(r"(?<=[.!?])\s+|\n+", answer)
-        if len(s.strip()) > 40 and not s.strip().startswith("#")
+        if len(s.strip()) > 40
+        and not s.strip().startswith("#")
+        and not s.strip().endswith(":")
     ]
     uncited = [s for s in sentences if not CITE.search(s)]
     return {
