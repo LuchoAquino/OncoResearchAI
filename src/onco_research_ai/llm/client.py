@@ -14,7 +14,18 @@ from onco_research_ai.config import settings
 
 litellm.suppress_debug_info = True
 litellm.drop_params = True  # ignora parámetros que un modelo de respaldo no admita
-logging.getLogger("LiteLLM").setLevel(logging.WARNING)
+logging.getLogger("LiteLLM").setLevel(logging.ERROR)
+
+
+class _DropLiteLLMWorkerNoise(logging.Filter):
+    """LiteLLM deja tareas de registro internas pendientes al usarlo de forma síncrona; asyncio
+    las reporta como error aunque son inofensivas. Se descartan SOLO esos mensajes."""
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        return "LoggingWorker" not in record.getMessage()
+
+
+logging.getLogger("asyncio").addFilter(_DropLiteLLMWorkerNoise())
 
 MODEL = "groq/openai/gpt-oss-120b"
 FALLBACKS = ["groq/openai/gpt-oss-20b", "groq/qwen/qwen3.8-27b"]

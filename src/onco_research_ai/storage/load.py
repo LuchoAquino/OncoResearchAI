@@ -10,7 +10,7 @@ from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
 from onco_research_ai.ingestion.raw_store import latest_complete_run
-from onco_research_ai.processing.drugs_seed import SEED
+from onco_research_ai.processing.drugs_seed import MECHANISM, SEED
 from onco_research_ai.processing.schemas import LabelIn, PublicationIn, TrialIn
 from onco_research_ai.storage.db import get_engine, init_db
 from onco_research_ai.storage.models import (
@@ -56,7 +56,7 @@ def _validated(items: Iterator[dict], model, name: str) -> list:
 
 def seed_drugs(session: Session) -> None:
     for name, syns in SEED.items():
-        drug = Drug(canonical_name=name)
+        drug = Drug(canonical_name=name, mechanism=MECHANISM.get(name))
         drug.synonyms.append(DrugSynonym(synonym=name, kind="inn", source="manual"))
         for kind, values in syns.items():
             drug.synonyms += [

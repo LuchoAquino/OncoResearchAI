@@ -15,3 +15,17 @@ SEED: dict[str, dict[str, list[str]]] = {
     "ipilimumab": {"brand": ["Yervoy"], "code": ["MDX-010", "BMS-734016"]},
     "relatlimab": {"brand": ["Opdualag"], "code": ["BMS-986016"]},
 }
+
+# Mecanismo de acción (diana). Lo daría ChEMBL; mientras tanto, conocimiento estándar.
+MECHANISM: dict[str, str] = {
+    "encorafenib": "BRAF inhibitor",
+    "dabrafenib": "BRAF inhibitor",
+    "vemurafenib": "BRAF inhibitor",
+    "binimetinib": "MEK inhibitor",
+    "trametinib": "MEK inhibitor",
+    "cobimetinib": "MEK inhibitor",
+    "pembrolizumab": "anti-PD-1",
+    "nivolumab": "anti-PD-1",
+    "ipilimumab": "anti-CTLA-4",
+    "relatlimab": "anti-LAG-3",
+}
