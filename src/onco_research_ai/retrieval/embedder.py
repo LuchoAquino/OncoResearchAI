@@ -21,15 +21,17 @@ DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 
 
 class Embedder:
-    def __init__(self, key: str):
+    def __init__(self, key: str, queries_only: bool = False):
+        """queries_only: para buscar solo hace falta el modelo de preguntas (MedCPT)."""
         self.key = key
         self.is_medcpt = key == "medcpt"
         if self.is_medcpt:
-            self.tokenizer = AutoTokenizer.from_pretrained(MODELS[key])
-            self.model = self._load(MODELS[key])
+            if not queries_only:
+                self.tokenizer = AutoTokenizer.from_pretrained(MODELS[key])
+                self.model = self._load(MODELS[key])
             self.query_tokenizer = AutoTokenizer.from_pretrained(MEDCPT_QUERY)
             self.query_model = self._load(MEDCPT_QUERY)
-            self.dim = self.model.config.hidden_size
+            self.dim = self.query_model.config.hidden_size
         else:
             self.model = SentenceTransformer(MODELS[key], device=DEVICE)
             if DEVICE == "cuda":

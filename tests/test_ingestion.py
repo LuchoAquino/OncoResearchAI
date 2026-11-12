@@ -254,3 +254,40 @@ def test_chunk_point_id_is_deterministic():
 
     assert Chunk("NCT1", 0, "x").point_id == Chunk("NCT1", 0, "otro texto").point_id
     assert Chunk("NCT1", 0, "x").point_id != Chunk("NCT1", 1, "x").point_id
+
+
+def test_bm25_tokenize_keeps_codes_and_their_parts():
+    from onco_research_ai.retrieval.bm25 import tokenize
+
+    assert tokenize("MK-3475 (pembrolizumab) in the patients") == [
+        "mk-3475",
+        "mk",
+        "3475",
+        "pembrolizumab",
+    ]
+
+
+def test_bm25_filters_behave_like_qdrant():
+    from onco_research_ai.retrieval.bm25 import matches
+
+    payload = {
+        "source": "trial",
+        "drugs": ["nivolumab", "relatlimab"],
+        "phases": ["PHASE3"],
+    }
+    assert matches(
+        payload, {"source": "trial", "drugs": "relatlimab", "phases": "PHASE3"}
+    )
+    assert not matches(payload, {"drugs": "ipilimumab"})
+    assert matches(payload, {"drugs": None})  # filtro vacío = sin filtrar
+
+
+def test_best_per_doc_keeps_first_chunk_of_each_document():
+    from onco_research_ai.retrieval.hybrid import Hit, best_per_doc
+
+    hits = [
+        Hit("1", {"doc_id": "A"}, 3),
+        Hit("2", {"doc_id": "A"}, 2),
+        Hit("3", {"doc_id": "B"}, 1),
+    ]
+    assert [h.point_id for h in best_per_doc(hits)] == ["1", "3"]
