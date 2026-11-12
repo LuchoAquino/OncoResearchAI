@@ -1,179 +1,289 @@
 # OncoResearchAI
 
-Plataforma de veille concurrentielle en oncología (melanoma): recolecta datos abiertos de
-fuentes heterogéneas, los alinea en bases relacional y vectorial, y los consulta con un
-agente que responde citando sus fuentes.
+**Un asistente que responde preguntas sobre el panorama competitivo del melanoma, citando
+siempre sus fuentes.**
 
-Fuentes: ClinicalTrials.gov, Europe PMC, openFDA, ChEMBL y PDFs de congresos.
+Los laboratorios farmacéuticos necesitan saber qué están desarrollando sus competidores: qué
+ensayos clínicos hay en marcha, qué resultados se han publicado, qué fármacos están aprobados.
+Esa información existe en bases de datos públicas, pero está repartida, escrita en formatos
+distintos y llena de nombres que se repiten (un mismo fármaco puede aparecer como
+«pembrolizumab», «Keytruda» o «MK-3475»).
 
-## Documentación por fases
+Este proyecto recoge esos datos, los ordena en un solo catálogo y construirá un asistente de
+IA que conteste preguntas como:
 
-### Fase 0 — Entorno y exploración
+> «¿Qué ensayos de fase 3 hay con inmunoterapia anti-PD-1 en melanoma y quién los patrocina?»
 
-Objetivo: preparar el proyecto y **entender cómo responde cada API** antes de construir nada.
+El caso de uso está pensado para **encorafenib + binimetinib** (Braftovi + Mektovi, de Pierre
+Fabre) frente a sus competidores en melanoma con mutación BRAF.
 
-- Proyecto Python con `uv`, `ruff` (estilo) y `pytest` (tests); repositorio git con `.gitignore`
-  que deja fuera `.env` y `data/`.
-- `docker-compose.yml` con Postgres y Qdrant; configuración leída del `.env` con
-  `pydantic-settings`.
-- Un *smoke test* por fuente (`scripts/smoke_*.py`): una consulta real, guardando la respuesta
-  para inspeccionar su estructura.
+> Estado: **proyecto en construcción.** Las fases 0 a 3 están hechas (datos descargados,
+> ordenados y con controles de calidad). El asistente de IA todavía no existe: ver la hoja de ruta.
+
+## Cómo funciona
+
+```
+ Fuentes públicas           Descarga          Catálogo ordenado          Asistente
+┌──────────────────┐     ┌───────────┐     ┌────────────────────┐     ┌──────────────┐
+│ ClinicalTrials   │     │  JSON     │     │ Base relacional    │     │ Preguntas en │
+│ Europe PMC       │ ──► │  crudo    │ ──► │ (Postgres)         │ ──► │ lenguaje     │
+│ openFDA          │     │  sin      │     │ + base vectorial   │     │ natural con  │
+│ ChEMBL (opcional)│     │  tocar    │     │ (Qdrant)           │     │ citas        │
+│ PDFs de congresos│     └───────────┘     └────────────────────┘     └──────────────┘
+└──────────────────┘      Fase 1             Fases 2, 3 y 4            Fases 5 a 10
+```
+
+- **Base relacional (Postgres):** tablas con filas y columnas. Sirve para preguntas exactas
+  («¿cuántos ensayos de fase 3 están reclutando?»).
+- **Base vectorial (Qdrant):** guarda el significado de los textos como números, para buscar
+  por tema aunque las palabras no coincidan («mecanismos de resistencia a la terapia»).
+- **El asistente** decidirá cuál de las dos usar y responderá citando de dónde sacó cada dato.
+
+## Hoja de ruta
+
+| Fase | Qué se hace | Estado |
+|---|---|---|
+| 0 | Preparar el entorno y explorar cada fuente de datos | ✔ Hecha |
+| 1 | Descargar todos los datos de forma fiable | ✔ Hecha (falta ChEMBL, opcional) |
+| 2 | Ordenar los datos en tablas y enlazarlos entre sí | ✔ Hecha |
+| 3 | Controles de calidad de los datos | ✔ Hecha (falta medir el extractor de IA) |
+| 4 | Indexar los textos en la base vectorial | Pendiente |
+| 5 | Búsqueda de documentos y su evaluación | Pendiente |
+| 6 | Respuestas con citas de las fuentes | Pendiente |
+| 7 | Agente que elige cómo buscar | Pendiente |
+| 8 | API web y servidor MCP | Pendiente |
+| 9 | Interfaz con Streamlit | Pendiente |
+| 10 | Evaluación de las respuestas | Pendiente |
+
+## Datos de partida
+
+| Fuente | Qué aporta | Registros descargados |
+|---|---|---|
+| [ClinicalTrials.gov](https://clinicaltrials.gov) | Ensayos clínicos: fase, estado, patrocinador, tratamientos | 3 782 |
+| [Europe PMC](https://europepmc.org) | Artículos científicos: título, resumen, revista, año | 3 883 |
+| [openFDA](https://open.fda.gov) | Fichas técnicas oficiales de fármacos aprobados | 48 |
+| [ChEMBL](https://www.ebi.ac.uk/chembl/) | Nombres alternativos de cada fármaco | Pendiente (servidor inestable) |
+| PDFs de congresos | Resultados aún no publicados, cargados a mano | Pendiente |
+
+Alcance: melanoma y 10 fármacos (encorafenib, binimetinib, dabrafenib, trametinib,
+vemurafenib, cobimetinib, pembrolizumab, nivolumab, ipilimumab, relatlimab).
+Por qué estas fuentes y no otras: [`docs/decisions/0001-data-sources.md`](docs/decisions/0001-data-sources.md).
+
+## Cómo ejecutarlo
+
+Necesitas Docker, [`uv`](https://docs.astral.sh/uv/) y Python 3.12.
+
+```bash
+cp .env.example .env              # y rellena las contraseñas (y GROQ_API_KEY para el paso 5)
+docker compose up -d              # 1. arranca Postgres y Qdrant
+uv sync                           # 2. instala las dependencias
+uv run python -m onco_research_ai.ingestion all          # 3. descarga los datos a data/raw/
+uv run python -m onco_research_ai.storage.load           # 4. los carga en Postgres
+uv run python -m onco_research_ai.processing.extractor --limit 20   # 5. extractor de IA (opcional)
+uv run python -m onco_research_ai.quality.checks         # 6. informe de calidad
+uv run pytest                     # tests
+```
+
+Los pasos 3 y 4 se pueden repetir sin riesgo: el 3 crea una descarga nueva sin borrar las
+anteriores y el 4 vacía las tablas y las recarga desde los datos descargados.
+La clave gratuita para el paso 5 se obtiene en [console.groq.com](https://console.groq.com).
+
+## Estructura del proyecto
+
+```
+src/onco_research_ai/
+  ingestion/    descarga de cada fuente (un conector por API)
+  processing/   limpieza, validación, diccionario de fármacos y extractor de IA
+  storage/      tablas de Postgres y carga de datos
+  quality/      controles de calidad
+docs/decisions/ por qué se eligió cada herramienta o fuente
+eval/reports/   informes de calidad generados
+scripts/        pruebas rápidas de cada API
+tests/          tests automáticos
+data/           datos descargados (no se suben a git)
+```
+
+---
+
+# Documentación por fases
+
+## Fase 0 — Entorno y exploración
+
+**Objetivo:** preparar el proyecto y entender cómo responde cada API antes de construir nada.
+
+- Proyecto Python con `uv` (dependencias), `ruff` (estilo) y `pytest` (tests); `.gitignore`
+  deja fuera las contraseñas (`.env`) y los datos (`data/`).
+- `docker-compose.yml` levanta Postgres y Qdrant con un comando.
+- Una prueba rápida por fuente (`scripts/smoke_*.py`): una consulta real para ver cómo
+  vienen los datos.
 
 Lo que se aprendió:
 
-- Cada API pagina distinto: ClinicalTrials.gov con token (`nextPageToken`), Europe PMC con
-  cursor (`cursorMark`), openFDA con offset (`skip`/`limit`) y ChEMBL con `page_meta`.
-- Los datos vienen sucios: ruido en las búsquedas, `phases` como lista que puede ser `None`
-  o `NA`, fichas de openFDA sin nombre de fármaco, sinónimos de ChEMBL con ruido.
-- ChEMBL da errores 500 de forma intermitente, lo que motivó los reintentos.
+- Cada API reparte los resultados en páginas de forma distinta: ClinicalTrials.gov con un token
+  (`nextPageToken`), Europe PMC con un cursor (`cursorMark`), openFDA con un desplazamiento
+  (`skip`/`limit`) y ChEMBL con un bloque `page_meta`.
+- Los datos vienen sucios: resultados que no son de melanoma, fases de ensayo vacías o
+  marcadas `NA`, fichas de openFDA sin nombre de fármaco, sinónimos de ChEMBL con ruido.
+- ChEMBL da errores 500 de forma intermitente.
 
-Decisión de fuentes: ver [`docs/decisions/0001-data-sources.md`](docs/decisions/0001-data-sources.md).
+## Fase 1 — Descarga de datos
 
-### Fase 1 — Ingestión de datos crudos
-
-Objetivo: convertir los scripts de exploración en una herramienta que descargue **todos** los datos, siempre igual y de forma fiable.
+**Objetivo:** convertir las pruebas en una herramienta que descargue **todos** los datos, siempre
+igual y de forma fiable.
 
 ```
 landscape.py   → qué estudiamos: melanoma + 10 fármacos
 conector       → sabe cómo paginar esa API (uno por fuente)
-http.py        → petición con timeout y reintentos
-raw_store.py   → guarda cada página tal cual + manifest.json
+http.py        → petición con tiempo máximo y reintentos
+raw_store.py   → guarda cada página tal cual + un manifest.json
 ```
-
-Se ejecuta con `uv run python -m onco_research_ai.ingestion <ctgov|epmc|openfda|chembl|all>`.
 
 Decisiones principales:
 
-- **Una sola capa HTTP** con reintentos con espera creciente, solo ante fallos transitorios
-  (5xx, 429, red); un 404 no se reintenta.
-- **Conectores como generadores:** entregan una página a la vez, sin cargar todo en memoria.
-- **Dato crudo inmutable:** una carpeta nueva por descarga en `data/raw/`; nunca se sobrescribe.
-- **`manifest.json` con `status`:** `complete` o `partial`. Una carpeta sin manifiesto es una
-  descarga cortada; una parcial terminó pero con errores. `latest_complete_run()` devuelve
-  solo la última fiable.
-- **Consulta acotada en Europe PMC:** de 69 852 artículos (búsqueda amplia, mucho ruido) a
-  3 883 (fármaco y melanoma en título/abstract, 2020-2026).
-- **Tests con un servidor HTTP falso** (9 tests): paginación, reintentos y estado de la descarga.
-
-Resultado de la descarga:
+- **Reintentos con espera creciente**, solo ante fallos pasajeros (error 5xx, límite de
+  peticiones, red caída). Un 404 no se reintenta: repetirlo no lo arregla.
+- **Los datos crudos no se tocan:** cada descarga va a una carpeta nueva en `data/raw/` y nunca
+  se sobrescribe. Si algo sale mal más adelante, se puede volver a empezar desde ahí.
+- **`manifest.json` con estado:** `complete` o `partial`. Una carpeta sin manifiesto es una
+  descarga cortada; una `partial` terminó pero con errores. Solo se usa la última `complete`.
+- **Búsqueda acotada en Europe PMC:** de 69 852 artículos (búsqueda amplia, mucho ruido) a
+  3 883 (fármaco y melanoma en título o resumen, de 2020 en adelante).
+- **Tests con un servidor HTTP falso** para probar paginación y reintentos sin depender de internet.
 
 | Fuente | Registros | Comprobación |
 |---|---|---|
-| ClinicalTrials.gov | 3 782 | Coincide con el total de la API, sin duplicados |
+| ClinicalTrials.gov | 3 782 | Coincide con el total que declara la API, sin duplicados |
 | Europe PMC | 3 883 | Sin duplicados |
 | openFDA | 48 | Coincide con el total de la API |
-| ChEMBL | pendiente | Servidor inestable; repetir cuando responda |
+| ChEMBL | pendiente | Servidor inestable; si no responde, simplemente no se usa esa fuente |
 
-El problema de ChEMBL tuvo dos partes: su servidor estaba degradado (no es nuestro código), y
-nuestro conector abortaba toda la descarga por un solo fármaco fallido. Se corrigió para que
-registre el error y siga con los demás, y el estado `partial` evita que una descarga fallida
-se confunda con una completa. Mientras no haya una descarga completa de ChEMBL, simplemente
-no se consulta esa fuente.
+**Diferencia entre las fases 0 y 1:**
 
-### Diferencia entre la Fase 0 y la Fase 1
-
-| | Fase 0 (exploración) | Fase 1 (ingestión) |
+| | Fase 0 (exploración) | Fase 1 (descarga) |
 |---|---|---|
 | Objetivo | Entender cómo responde cada API | Descargar todos los datos |
 | Cantidad | 5-10 registros de muestra | Miles de registros |
 | Paginación | 2 páginas probadas a mano | Hasta el final, automática |
-| Errores | Se rompía (salvo reintento en ChEMBL) | Reintentos y estado de la descarga |
-| Guardado | Un JSON suelto | Carpeta por descarga con manifiesto |
-| Calidad | Sin tests | 9 tests |
+| Errores | Se rompía | Reintentos y estado de la descarga |
 | Uso | Scripts sueltos | Un comando |
-| Código | Cada script repetía lo mismo | Pieza común + un conector por fuente |
 
-### Fase 2 — Modelo de datos y alineación
+## Fase 2 — Modelo de datos y alineación
 
-Objetivo: convertir los JSON crudos, cada uno con su formato, en **un catálogo relacional
-común** donde se pueda cruzar la información (ensayo ↔ fármaco ↔ artículo).
+**Objetivo:** convertir los JSON crudos, cada uno con su formato, en **un catálogo único** donde
+se pueda cruzar la información (ensayo ↔ fármaco ↔ artículo).
 
-**Qué contiene cada tabla y de dónde sale**
+### Qué contiene cada tabla y de dónde sale
 
-Cada tabla es una lista de cosas de un mismo tipo. Las tablas de cruce son listas que dicen
+Cada tabla es una lista de cosas del mismo tipo. Las «tablas de cruce» son listas que dicen
 «esta cosa va con esta otra».
 
 | Tabla | Origen | Ejemplo de fila |
 |---|---|---|
-| `trials`, `trial_interventions` | ClinicalTrials.gov (el protocolo que declara el patrocinador) | NCT04657991, fase 3; usa «Encorafenib» |
-| `publications` | Europe PMC (registro bibliográfico: título, abstract, revista) | Artículo con su PMID y DOI |
-| `labels`, `label_sections` | openFDA (ficha técnica oficial, dividida por secciones) | Ficha de BRAFTOVI → sección «indications_and_usage» |
-| `drugs`, `drug_synonyms` | **Escritas a mano** (`processing/drugs_seed.py`); ChEMBL las ampliará | encorafenib ← braftovi, lgx818 |
-| `trial_drugs`, `trial_publications`, `publication_drugs`, `label_drugs` | **Calculadas** al cargar, cruzando las anteriores | NCT04657991 ↔ encorafenib |
+| `trials`, `trial_interventions` | ClinicalTrials.gov (lo que declara el patrocinador antes del ensayo) | NCT04657991, fase 3; usa «Encorafenib» |
+| `publications` | Europe PMC (registro bibliográfico: título, resumen, revista) | Un artículo con su PMID y DOI |
+| `labels`, `label_sections` | openFDA (ficha técnica oficial, dividida por secciones) | Ficha de BRAFTOVI → sección «indicaciones» |
+| `drugs`, `drug_synonyms` | **Escritas a mano** en `processing/drugs_seed.py` | encorafenib ← braftovi, lgx818 |
+| `trial_drugs`, `publication_drugs`, `label_drugs`, `trial_publications` | **Calculadas** al cargar, cruzando las anteriores | NCT04657991 ↔ encorafenib |
+| `publication_extractions` | **Generada por IA** a partir del resumen de cada artículo | Un artículo → n = 270, PFS = 14,9 meses |
 
-Cada fila de `trials`, `publications` y `labels` guarda en `source_run` la carpeta de
-`data/raw/` de la que salió (trazabilidad).
+Cada fila guarda en `source_run` la carpeta de `data/raw/` de la que salió, así siempre se
+puede rastrear su origen.
 
-**Cómo se enlazan las fuentes**
+### Cómo se enlazan las fuentes
 
-Ninguna fuente comparte clave con las otras, así que el **fármaco es el pivote**: cada fuente
-se conecta a `drugs` con el dato que sí trae.
+Las tres fuentes no comparten ningún identificador, así que el **fármaco hace de punto de
+unión**: cada fuente se conecta a la tabla `drugs` con el dato que sí trae.
 
 ```
-Ensayo ──────► Fármaco     ✔ comparando sus intervenciones con los sinónimos
-Artículo ────► Fármaco     ✔ sinónimos en título o abstract (`publication_drugs`; `in_title` marca si está en el título)
-Ficha FDA ───► Fármaco     ✔ por el bloque `openfda`; si falta, por el texto (`label_drugs`)
-Ensayo ◄───► Artículo      ✔ por dos rutas (ver abajo)
+Ensayo ──────► Fármaco     comparando sus tratamientos con los nombres conocidos del fármaco
+Artículo ────► Fármaco     buscando esos nombres en el título y el resumen (in_title marca si está en el título)
+Ficha FDA ───► Fármaco     por el nombre de la ficha; si falta, buscando en su texto
+Ensayo ◄───► Artículo      por dos rutas (abajo)
 ```
 
-El enlace ensayo ↔ artículo tiene dos rutas, con distinta fiabilidad (`link_type`):
+Enlace ensayo ↔ artículo, con dos niveles de fiabilidad (`link_type`):
 
-- `trial_reference`: el ensayo declara el PMID del artículo entre sus referencias (fiable).
-- `abstract_mention`: el artículo cita el código NCT en su título o abstract (menos fiable).
+- `trial_reference`: el propio ensayo declara el artículo entre sus referencias (fiable).
+- `abstract_mention`: el artículo cita el código NCT del ensayo en su título o resumen (menos fiable).
 
-Las cifras se pueden comprobar con SQL; por ejemplo, ensayos con algún fármaco:
-`select count(distinct nct_id) from trial_drugs;`
+Con esto, un solo cruce por `drugs` responde: «dame los ensayos, artículos y fichas de pembrolizumab».
 
-**Estado**
+### Limitaciones conocidas
+
+- Solo se enlazan los 10 fármacos del diccionario. Las fichas de otros fármacos (dacarbazina,
+  atezolizumab…) quedan sueltas: 34 de las 48.
+- Un artículo enlazado por el resumen puede mencionar el fármaco solo de pasada; por eso existe `in_title`.
+- 21 de las 48 fichas no traen nombre de fármaco como dato aparte.
+
+### El extractor de IA y las alucinaciones
+
+Algunos datos clave (número de pacientes, supervivencia, línea de tratamiento) solo aparecen
+dentro del texto libre de los resúmenes. Un modelo de lenguaje (`gpt-oss-120b` de Groq, a través
+de LiteLLM) los lee y rellena un formulario fijo. Pero un modelo puede **inventar** un dato, así
+que hay tres defensas:
+
+1. El prompt exige `null` si el dato no aparece.
+2. Pydantic rechaza valores fuera del formulario (por ejemplo, una línea de tratamiento inexistente).
+3. Cada cifra devuelta debe aparecer **literalmente** en el resumen; si no, queda anotada en `unverified_fields`.
+
+Ejemplo real: el estudio CheckMate 067 da tres grupos (n = 314, 316 y 315) y el modelo devolvió
+n = 945, la suma. Es correcto, pero no está escrito, así que quedó marcado como no verificado.
+Esta tabla no se vacía al recargar los datos, porque cada extracción consume cuota de la API.
+
+### Estado
 
 - [x] Modelo de datos y tablas en Postgres
-- [x] Carga validada con Pydantic: 3 782 ensayos, 3 883 artículos, 48 fichas
-  (`uv run python -m onco_research_ai.storage.load`; se puede repetir: vacía y recarga)
-- [x] Diccionario de 10 fármacos (36 nombres) y vínculo ensayo ↔ fármaco: 972 ensayos enlazados
-- [x] Vínculo ensayo ↔ artículo: 339 por referencia y 282 por mención del NCT
-- [x] Artículos ↔ fármacos: 3 865 artículos enlazados (2 190 vínculos con el fármaco en el título)
-- [x] Fichas ↔ fármacos: 14 de 48 fichas; las otras 34 son de fármacos fuera de nuestros 10 (dacarbazina, atezolizumab, aldesleukina...)
-- [ ] Ampliar sinónimos con ChEMBL (opcional; el diccionario manual basta por ahora)
-- [x] Extractor con LLM (`processing/extractor.py`, Groq `gpt-oss-120b` vía LiteLLM): del abstract saca
-  tipo de estudio, línea de tratamiento, n, ORR, PFS y OS en `publication_extractions`
-  (`uv run python -m onco_research_ai.processing.extractor --limit N`)
+- [x] Carga validada con Pydantic: 3 782 ensayos, 3 838 artículos (tras quitar duplicados), 48 fichas
+- [x] Diccionario de 10 fármacos (36 nombres) y enlaces con ensayos, artículos y fichas
+- [x] Extractor de IA probado con 47 artículos
+- [ ] Ampliar el diccionario con ChEMBL (opcional)
 
-**El extractor y las alucinaciones.** Un LLM puede inventar un dato que no está en el texto, así
-que hay tres defensas: el prompt exige `null` si el dato no aparece; Pydantic rechaza valores
-fuera del formulario (p. ej. una línea de tratamiento inexistente); y cada cifra devuelta debe
-aparecer **literalmente** en el abstract, si no se anota en `unverified_fields`. Ejemplo real:
-en CheckMate 067 el abstract da tres grupos (n = 314, 316 y 315) y el LLM devolvió n = 945, la
-suma; es correcta pero no está escrita, así que quedó marcada como no verificada.
-La tabla no se vacía al recargar los datos, porque cada extracción consume cuota de API.
+## Fase 3 — Calidad de datos
 
-### Fase 3 — Calidad de datos
-
-Objetivo: saber **cuánto fiarse** de los datos cargados. Cada control es una consulta SQL con
-nombre y explicación (`quality/checks.py`); el informe se genera en `eval/reports/`:
-
-```
-uv run python -m onco_research_ai.quality.checks
-```
+**Objetivo:** saber **cuánto fiarse** de los datos cargados. Cada control es una consulta SQL
+con nombre y explicación (`quality/checks.py`), y el informe se guarda en `eval/reports/`.
 
 | Tipo | Pregunta | Ejemplo |
 |---|---|---|
 | Completitud | ¿Cuántos datos faltan? | 1,0 % de ensayos sin fecha de inicio; 43,8 % de fichas sin nombre de marca |
-| Consistencia | ¿Hay datos imposibles? (debe ser 0) | Ensayo que termina antes de empezar |
-| Duplicados | ¿Está algo repetido? (debe ser 0) | Mismo artículo como preprint y como versión publicada |
-| Pertinencia | ¿Cuánto es ruido? | 8,8 % de ensayos no nombra «melanoma» (suelen ser «Solid Tumors») |
+| Consistencia | ¿Hay datos imposibles? (debe ser 0) | Un ensayo que termina antes de empezar |
+| Duplicados | ¿Hay algo repetido? (debe ser 0) | El mismo artículo como preprint y como versión publicada |
+| Pertinencia | ¿Cuánto es ruido? | 8,8 % de ensayos no nombra «melanoma» (suelen ser genéricos: «Solid Tumors») |
 | Alineación | ¿Qué parte quedó enlazada? | 25,7 % de ensayos con fármaco; 99,5 % de artículos |
 
 Lo que encontró el primer informe:
 
 - **Falsa alarma:** 139 ensayos con tamaño 0. Eran todos `WITHDRAWN` (cancelados antes de
-  reclutar), donde 0 es correcto. Se corrigió el control, no los datos.
-- **Duplicados reales:** el mismo artículo como preprint (`PPR`) y como versión publicada
-  (`MED`) con DOI distinto. Se detectan por título+año normalizados y se conserva la versión de
-  PubMed (45 eliminados). Un primer desempate dejaba registros de Agricola sin DOI en lugar de
-  los de PubMed; lo detectó una revisión manual.
+  reclutar a nadie), donde 0 es correcto. Se corrigió el control, no los datos.
+- **Duplicados reales:** el mismo artículo como preprint y como versión publicada, con DOI
+  distinto. Se detectan por título y año, y se conserva la versión de PubMed (45 eliminados).
+  Una primera versión conservaba registros de Agricola sin DOI; se detectó al revisar a mano
+  qué se eliminaba.
 - Solo el 6,3 % de los ensayos tiene un artículo enlazado: el enlace es fiable pero escaso.
 
-Pendiente: medir la precisión del extractor LLM contra una muestra anotada a mano.
+**Pendiente:** medir qué porcentaje de las extracciones de la IA son correctas, comparándolas
+con una muestra revisada a mano.
+
+---
+
+# Glosarios
+
+## Glosario técnico
+
+| Término | Significado |
+|---|---|
+| API | Forma que ofrece un sitio web para que un programa le pida datos |
+| Paginación | Repartir un resultado grande en trozos («páginas») |
+| JSON | Formato de texto para guardar datos estructurados |
+| Pipeline | Cadena de pasos: descargar → limpiar → guardar → consultar |
+| Base relacional | Datos en tablas con filas y columnas, consultables con SQL |
+| Base vectorial | Guarda el significado de un texto como números para buscar por parecido |
+| Tabla de cruce | Tabla que enlaza dos tablas («este ensayo usa este fármaco») |
+| LLM | Modelo de lenguaje (tipo ChatGPT) |
+| Alucinación | Cuando un LLM inventa algo que no está en la fuente |
+| RAG | Que el LLM conteste usando documentos buscados antes, y los cite |
+| Pydantic | Librería que valida que un dato tenga el formato esperado |
+| Docker | Programa que ejecuta servicios (como Postgres) sin instalarlos a mano |
 
 ## Glosario médico y científico
 
