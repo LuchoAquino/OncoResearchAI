@@ -1,2 +1,5 @@
+"""OncoResearchAI: veille concurrentielle en melanoma con RAG, agentes y MCP."""
+
+
 def main() -> None:
-    print("Hello from OncoResearchAI!")
+    print("OncoResearchAI — ejecuta `make help` para ver los comandos disponibles.")

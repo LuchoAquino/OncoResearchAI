@@ -64,13 +64,17 @@ def format_context(sources: list[Source]) -> str:
 def unsupported_numbers(answer: str, context: str) -> list[str]:
     """Números de la respuesta que no aparecen en ninguna fuente (inventados o calculados).
 
-    Se ignoran las referencias [S3] y los enteros de una cifra (numeración, "fase 3").
+    Cada número se acepta si ALGUNA de sus lecturas está en las fuentes: "1,5" puede ser
+    1.5 (decimal en español) o 15 (separador de miles en inglés). Se ignoran las referencias
+    [S3] y los enteros de una cifra (numeración, "fase 3").
     """
     in_context = numbers_in(context)
-    found = numbers_in(CITE.sub(" ", answer))
-    return sorted(
-        n for n in found if n not in in_context and not (n.isdigit() and len(n) == 1)
-    )
+    bad = set()
+    for tok in re.findall(r"\d+(?:[.,]\d+)*", CITE.sub(" ", answer)):
+        readings = {tok.replace(",", "").rstrip("."), tok.replace(",", ".")}
+        if not readings & in_context and not (tok.isdigit() and len(tok) == 1):
+            bad.add(tok)
+    return sorted(bad)
 
 
 def check_citations(

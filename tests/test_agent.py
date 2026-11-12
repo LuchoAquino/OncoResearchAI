@@ -50,3 +50,12 @@ def test_unsupported_numbers_catches_invented_totals():
     assert unsupported_numbers(
         "There are 13 trials: 5 [SQL] and 7 [SQL]; PFS 14.9 [S2].", context
     ) == ["13"]
+
+
+def test_unsupported_numbers_accepts_spanish_decimal_comma():
+    assert (
+        unsupported_numbers(
+            "reducción a 1,5 mg y luego 1 mg [S1]", "reduce to 1.5 mg, then 1 mg"
+        )
+        == []
+    )

@@ -9,61 +9,76 @@ Esa información existe en bases de datos públicas, pero está repartida, escri
 distintos y llena de nombres que se repiten (un mismo fármaco puede aparecer como
 «pembrolizumab», «Keytruda» o «MK-3475»).
 
-Este proyecto recoge esos datos, los ordena en un solo catálogo y construirá un asistente de
-IA que conteste preguntas como:
+Este proyecto recoge esos datos, los ordena en un solo catálogo y ofrece un asistente de IA
+que contesta preguntas como:
 
-> «¿Qué ensayos de fase 3 hay con inmunoterapia anti-PD-1 en melanoma y quién los patrocina?»
+> «¿Qué ensayos de fase 3 con encorafenib están activos y qué comparan?»
+> «¿Qué fármaco anti-PD-1 tiene más ensayos de fase 3?»
+> «What are the main mechanisms of resistance to BRAF inhibitors?»
 
-El caso de uso está pensado para **encorafenib + binimetinib** (Braftovi + Mektovi, de Pierre
-Fabre) frente a sus competidores en melanoma con mutación BRAF.
+y responde **citando cada afirmación** con un enlace a su fuente (ensayo, artículo, ficha FDA o
+PDF de congreso). El caso de uso está pensado para **encorafenib + binimetinib** (Braftovi +
+Mektovi, de Pierre Fabre) frente a sus competidores en melanoma.
 
-> Estado: **proyecto en construcción.** Las fases 0 a 3 están hechas (datos descargados,
-> ordenados y con controles de calidad). El asistente de IA todavía no existe: ver la hoja de ruta.
+> Estado: **funcional de punta a punta** (fases 0-10). Pendientes que necesitan revisión
+> humana: medir el extractor de IA con una muestra anotada y revisar el conjunto de evaluación.
 
 ## Cómo funciona
 
 ```
- Fuentes públicas           Descarga          Catálogo ordenado          Asistente
-┌──────────────────┐     ┌───────────┐     ┌────────────────────┐     ┌──────────────┐
-│ ClinicalTrials   │     │  JSON     │     │ Base relacional    │     │ Preguntas en │
-│ Europe PMC       │ ──► │  crudo    │ ──► │ (Postgres)         │ ──► │ lenguaje     │
-│ openFDA          │     │  sin      │     │ + base vectorial   │     │ natural con  │
-│ ChEMBL (opcional)│     │  tocar    │     │ (Qdrant)           │     │ citas        │
-│ PDFs de congresos│     └───────────┘     └────────────────────┘     └──────────────┘
-└──────────────────┘      Fase 1             Fases 2, 3 y 4            Fases 5 a 10
+ Fuentes públicas          Catálogo                        Asistente                 Uso
+┌──────────────────┐   ┌──────────────────┐   ┌──────────────────────────────┐   ┌───────────┐
+│ ClinicalTrials   │   │ Postgres         │   │ 1. Planifica: ¿datos exactos │   │ Streamlit │
+│ Europe PMC       │──►│ (tablas+enlaces) │──►│    (SQL) o contenido         │──►│ API REST  │
+│ openFDA          │   │ Qdrant (vectores)│   │    (búsqueda)?               │   │ MCP       │
+│ PDFs congresos   │   │ BM25 (palabras)  │   │ 2. Busca / consulta          │   │ (agentes) │
+└──────────────────┘   └──────────────────┘   │ 3. Responde citando [S1]     │   └───────────┘
+                                              │ 4. Verifica citas y números  │
+                                              └──────────────────────────────┘
 ```
 
-- **Base relacional (Postgres):** tablas con filas y columnas. Sirve para preguntas exactas
-  («¿cuántos ensayos de fase 3 están reclutando?»).
-- **Base vectorial (Qdrant):** guarda el significado de los textos como números, para buscar
-  por tema aunque las palabras no coincidan («mecanismos de resistencia a la terapia»).
-- **El asistente** decidirá cuál de las dos usar y responderá citando de dónde sacó cada dato.
+- **Postgres (base relacional):** responde preguntas exactas («¿cuántos ensayos de fase 3
+  están reclutando?») con SQL que el agente escribe y que se valida antes de ejecutarlo.
+- **Qdrant + BM25 (búsqueda híbrida):** encuentra textos por significado *y* por palabras
+  exactas (nombres de fármacos, códigos como MK-3475), y un reranker reordena los mejores.
+- **El agente (LangGraph)** decide qué usar, responde solo con lo encontrado y comprueba que
+  cada cita exista y que cada número aparezca en las fuentes; si no, reescribe la respuesta.
+
+## Resultados principales
+
+| Qué se midió | Resultado | Detalle |
+|---|---|---|
+| Búsqueda: el documento correcto entre los 5 primeros | **87 %** (102 preguntas) | Fase 5 |
+| Búsqueda: preguntas en español | 74 % (el agente traduce al inglés antes de buscar) | Fase 5 |
+| Respuestas: dato correcto en preguntas con respuesta conocida | 4 de 4 | Fase 10 |
+| Respuestas: afirmaciones respaldadas por sus fuentes (LLM juez) | 84 % (12 preguntas) | Fase 10 |
+| Tiempo de respuesta | ~2 s búsqueda · ~5-20 s respuesta completa | GTX 1650 + Groq gratis |
 
 ## Hoja de ruta
 
 | Fase | Qué se hace | Estado |
 |---|---|---|
-| 0 | Preparar el entorno y explorar cada fuente de datos | ✔ Hecha |
-| 1 | Descargar todos los datos de forma fiable | ✔ Hecha (falta ChEMBL, opcional) |
-| 2 | Ordenar los datos en tablas y enlazarlos entre sí | ✔ Hecha |
-| 3 | Controles de calidad de los datos | ✔ Hecha (falta medir el extractor de IA) |
-| 4 | Indexar los textos en la base vectorial | ✔ Hecha con MiniLM y MedCPT (bge-m3 pendiente) |
-| 5 | Búsqueda de documentos y su evaluación | Pendiente |
-| 6 | Respuestas con citas de las fuentes | Pendiente |
-| 7 | Agente que elige cómo buscar | Pendiente |
-| 8 | API web y servidor MCP | Pendiente |
-| 9 | Interfaz con Streamlit | Pendiente |
-| 10 | Evaluación de las respuestas | Pendiente |
+| 0 | Preparar el entorno y explorar cada fuente de datos | ✔ |
+| 1 | Descargar todos los datos de forma fiable | ✔ (ChEMBL opcional, servidor inestable) |
+| 2 | Ordenar los datos en tablas y enlazarlos entre sí | ✔ |
+| 3 | Controles de calidad de los datos | ✔ (falta medir el extractor con anotación manual) |
+| 4 | Indexar los textos en la base vectorial | ✔ MiniLM y MedCPT (bge-m3 opcional) |
+| 5 | Búsqueda híbrida y su evaluación | ✔ |
+| 6 | Respuestas con citas de las fuentes | ✔ |
+| 7 | Agente que elige cómo buscar (LangGraph) | ✔ |
+| 8 | API REST y servidor MCP | ✔ |
+| 9 | Interfaz con Streamlit | ✔ |
+| 10 | Evaluación de las respuestas + PDFs de congresos | ✔ |
 
 ## Datos de partida
 
-| Fuente | Qué aporta | Registros descargados |
+| Fuente | Qué aporta | Registros |
 |---|---|---|
 | [ClinicalTrials.gov](https://clinicaltrials.gov) | Ensayos clínicos: fase, estado, patrocinador, tratamientos | 3 782 |
-| [Europe PMC](https://europepmc.org) | Artículos científicos: título, resumen, revista, año | 3 883 |
+| [Europe PMC](https://europepmc.org) | Artículos científicos: título, resumen, revista, año | 3 838 (tras quitar duplicados) |
 | [openFDA](https://open.fda.gov) | Fichas técnicas oficiales de fármacos aprobados | 48 |
-| [ChEMBL](https://www.ebi.ac.uk/chembl/) | Nombres alternativos de cada fármaco | Pendiente (servidor inestable) |
-| PDFs de congresos | Resultados aún no publicados, cargados a mano | Pendiente |
+| [ChEMBL](https://www.ebi.ac.uk/chembl/) | Nombres alternativos de cada fármaco | Opcional (servidor inestable) |
+| PDFs de congresos | Resultados aún no publicados, cargados a mano | Listo para usar (`data/manual_pdfs/`) |
 
 Alcance: melanoma y 10 fármacos (encorafenib, binimetinib, dabrafenib, trametinib,
 vemurafenib, cobimetinib, pembrolizumab, nivolumab, ipilimumab, relatlimab).
@@ -71,39 +86,56 @@ Por qué estas fuentes y no otras: [`docs/decisions/0001-data-sources.md`](docs/
 
 ## Cómo ejecutarlo
 
-Necesitas Docker, [`uv`](https://docs.astral.sh/uv/) y Python 3.12.
+Necesitas Docker, [`uv`](https://docs.astral.sh/uv/), Python 3.12, una GPU NVIDIA (recomendada,
+no obligatoria) y una clave gratuita de Groq ([console.groq.com](https://console.groq.com)).
 
 ```bash
-cp .env.example .env              # y rellena las contraseñas (y GROQ_API_KEY para el paso 5)
-docker compose up -d              # 1. arranca Postgres y Qdrant
-uv sync                           # 2. instala las dependencias
-uv run python -m onco_research_ai.ingestion all          # 3. descarga los datos a data/raw/
-uv run python -m onco_research_ai.storage.load           # 4. los carga en Postgres
-uv run python -m onco_research_ai.processing.extractor --limit 20   # 5. extractor de IA (opcional)
-uv run python -m onco_research_ai.quality.checks         # 6. informe de calidad
-uv run python -m onco_research_ai.retrieval.index --model minilm   # 7. indexa en Qdrant (6 min en GPU); también: medcpt (35 min), bge-m3 (~100 min)
-uv run python -m onco_research_ai.retrieval.search "resistance to BRAF inhibitors" --model minilm   # 8. prueba de búsqueda
-uv run pytest                     # tests
+cp .env.example .env     # rellena las contraseñas de Postgres y GROQ_API_KEY
+make install             # dependencias
+make pipeline            # Docker + descarga + carga en Postgres + calidad + índices (~15 min)
+make api                 # terminal 1: API en http://localhost:8000/docs
+make ui                  # terminal 2: interfaz en http://localhost:8501
 ```
 
-Los pasos 3 y 4 se pueden repetir sin riesgo: el 3 crea una descarga nueva sin borrar las
-anteriores y el 4 vacía las tablas y las recarga desde los datos descargados.
-La clave gratuita para el paso 5 se obtiene en [console.groq.com](https://console.groq.com).
+`make help` lista todos los comandos (evaluaciones, PDFs, MCP, tests...). La primera
+pregunta tarda más porque descarga y carga los modelos de Hugging Face.
+
+**Usarlo desde Claude (MCP).** El servidor MCP expone 5 herramientas (`search_evidence`,
+`query_trials`, `get_drug_profile`, `get_landscape`, `ask`). En Claude Code:
+
+```bash
+claude mcp add oncoresearchai -- uv --directory /ruta/a/OncoResearchAI run python -m onco_research_ai.mcp_server.server
+```
+
+En Claude Desktop, en `claude_desktop_config.json`:
+
+```json
+{"mcpServers": {"oncoresearchai": {"command": "uv", "args": ["--directory", "/ruta/a/OncoResearchAI",
+  "run", "python", "-m", "onco_research_ai.mcp_server.server"]}}}
+```
+
+**Añadir PDFs de congresos:** copia los PDF en `data/manual_pdfs/`, opcionalmente un
+`metadata.csv` (`file,title,congress,year,url`), y ejecuta `make pdfs`.
 
 ## Estructura del proyecto
 
 ```
 src/onco_research_ai/
-  ingestion/    descarga de cada fuente (un conector por API)
-  processing/   limpieza, validación, diccionario de fármacos y extractor de IA
-  storage/      tablas de Postgres y carga de datos
+  ingestion/    descarga de cada fuente (un conector por API) y PDFs de congresos
+  processing/   limpieza, validación, diccionario de fármacos, troceado y extractor de IA
+  storage/      tablas de Postgres, carga de datos, consultas fijas y acceso a Qdrant
   quality/      controles de calidad
-  retrieval/    embeddings, indexación en Qdrant y búsqueda
+  retrieval/    embeddings, indexación, BM25, búsqueda híbrida y reranker
+  llm/          cliente único del LLM (LiteLLM + Groq, con respaldo y reintentos)
+  agent/        agente LangGraph: SQL seguro, citas y verificación
+  api/          API REST (FastAPI)
+  mcp_server/   servidor MCP
+  evaluation/   conjunto de evaluación y evaluaciones de búsqueda y de respuestas
+app/            interfaz Streamlit
 docs/decisions/ por qué se eligió cada herramienta o fuente
-eval/reports/   informes de calidad generados
-scripts/        pruebas rápidas de cada API
-tests/          tests automáticos
-data/           datos descargados (no se suben a git)
+eval/           conjunto de evaluación e informes generados (eval/reports/)
+tests/          tests automáticos (pytest)
+data/           datos descargados e índices (no se suben a git)
 ```
 
 ---
@@ -339,6 +371,176 @@ para poder compararlos con justicia en la fase 5.
 El último caso es la limitación esperada de la búsqueda por significado con nombres propios, y
 es la razón de la búsqueda híbrida (BM25 + vectores) de la fase 5.
 
+## Fase 5 — Búsqueda híbrida y su evaluación
+
+**Objetivo:** encontrar el documento correcto, y **medirlo** en vez de fiarse de ejemplos sueltos.
+
+```
+pregunta ─┬─► Qdrant (significado)  50 candidatos ─┐
+          └─► BM25 (palabras exactas) 50 candidatos ─┴─► RRF ─► reranker (20 mejores) ─► top k
+```
+
+- **BM25:** puntúa por palabras compartidas, dando más peso a las raras («relatlimab»,
+  «mk-3475»). Gana justo donde fallan los embeddings: nombres propios y códigos.
+- **RRF (Reciprocal Rank Fusion):** une las dos listas sumando 1/(60 + posición). Usa
+  posiciones y no puntuaciones, porque un coseno y una puntuación BM25 no son comparables.
+- **Reranker (cross-encoder MedCPT):** lee pregunta y texto *juntos*, así que es más preciso
+  que comparar dos vectores calculados por separado, pero lento (~90 ms por texto en una GTX
+  1650). Por eso solo reordena los 20 mejores: reordenar 100 tardaba 9 s y 20 tarda ~2 s.
+
+**Conjunto de evaluación** (`eval/golden_set.jsonl`, 102 preguntas): se eligieron 42 trozos
+al azar (ensayos, artículos y fichas) y un LLM escribió una pregunta que cada uno responde; ese
+documento es la respuesta correcta. Variantes: la misma pregunta **en español** (42) y con el
+**código** del fármaco en vez del nombre (18, p. ej. MK-3475 por pembrolizumab).
+
+| Configuración | Recall@1 | Recall@5 | MRR@10 | s/pregunta |
+|---|---|---|---|---|
+| BM25 (palabras) | 0,54 | 0,72 | 0,63 | 0,1 |
+| Denso MiniLM | 0,62 | 0,81 | 0,70 | 0,02 |
+| Denso MedCPT | 0,27 | 0,50 | 0,37 | 0,03 |
+| Híbrido MiniLM | 0,65 | 0,84 | 0,73 | 0,1 |
+| Híbrido MedCPT + reranker | 0,72 | 0,81 | 0,76 | 2,2 |
+| **Híbrido MiniLM + reranker** (elegido) | **0,75** | **0,87** | **0,80** | 2,1 |
+
+*Recall@5: % de preguntas cuyo documento correcto sale entre los 5 primeros. MRR: premia que
+salga arriba (1 si es el 1.º, 0,5 si es el 2.º...).* Informe completo en `eval/reports/`.
+
+Lo que enseña:
+
+- **El híbrido gana** a cada método por separado, y el reranker suma otros 10 puntos de Recall@1.
+- **MedCPT, el modelo biomédico, buscó peor que el general.** Se entrenó con búsquedas cortas
+  de PubMed y artículos; aquí las preguntas son frases largas y un tercio de los documentos son
+  ensayos y fichas. Como *reranker*, en cambio, sí aporta. Se descartó como buscador por datos,
+  no por intuición.
+- **Español:** 74 % frente a 98 % en inglés, porque los modelos son de inglés. Por eso el agente
+  traduce la pregunta antes de buscar.
+- **Limitaciones:** las preguntas son sintéticas y comparten palabras con su documento (BM25
+  acierta el 98 % de las parafraseadas), y solo hay una respuesta correcta por pregunta (otro
+  documento igual de válido cuenta como fallo). Conviene revisarlas a mano.
+
+## Fases 6 y 7 — Agente que responde citando
+
+**Objetivo:** responder en lenguaje natural sin inventar, y que cada afirmación se pueda comprobar.
+
+```
+plan ──► SQL? ──► búsqueda? ──► redactar ──► verificar ──► respuesta
+                                    ▲             │
+                                    └─────────────┘ (reintento si algo no cuadra)
+```
+
+1. **Planificar:** el LLM clasifica la pregunta: datos exactos → SQL; contenido → búsqueda;
+   ambas → las dos. También traduce la pregunta al inglés y extrae filtros (fármaco, fase,
+   tipo de fuente), traduciendo marcas y códigos a su nombre genérico (Keytruda → pembrolizumab).
+2. **SQL seguro:** el LLM escribe la consulta y antes de ejecutarla `sqlglot` comprueba que sea
+   una sola sentencia, solo `SELECT` y solo sobre tablas conocidas. Se ejecuta en una transacción
+   de **solo lectura**, con 5 s de tiempo máximo y 50 filas como mucho. Si falla, el error se le
+   devuelve al LLM para que lo corrija; si devuelve 0 filas, se le pide que revise la lógica.
+3. **Redactar:** el LLM solo ve las fuentes numeradas `[S1]...[Sn]` y el resultado `[SQL]`, y
+   debe citar cada afirmación.
+4. **Verificar:** se comprueba que no cite fuentes inexistentes, que las frases tengan cita y que
+   **cada número de la respuesta aparezca en las fuentes**. Si algo falla, reescribe la respuesta
+   indicándole qué número o frase no tiene respaldo.
+
+Tres fallos reales que motivaron estas defensas:
+
+- **Totales inventados:** el agente dijo «13 ensayos» de fase 3 con inhibidores de BRAF; eran 18
+  (y las filas sumaban 20, porque un ensayo puede usar dos fármacos). Pedírselo en el prompt no
+  bastó; la verificación de números sí lo corrige.
+- **Un «no existe» falso:** un SQL mal planteado devolvió 0 ensayos BRAF + MEK reclutando y el
+  agente lo afirmó con seguridad; había 11. Ahora un resultado vacío se revisa antes de aceptarlo.
+- **Citas con otros corchetes:** el modelo a veces escribe `【S1】`; se normalizan para verificarlas.
+
+## Fase 8 — API REST y servidor MCP
+
+**API REST (FastAPI)**, con documentación interactiva en `http://localhost:8000/docs`:
+
+| Endpoint | Qué hace |
+|---|---|
+| `GET /health` | Estado de Postgres y Qdrant |
+| `POST /search` | Búsqueda híbrida con filtros (fuente, fármaco, fase) |
+| `POST /ask` | Pregunta al agente: respuesta, fuentes citadas, SQL usado y verificación |
+| `GET /trials` | Ensayos filtrados por fármaco, mecanismo, fase, estado, patrocinador |
+| `GET /drugs`, `GET /drugs/{nombre}` | Perfil de un fármaco (acepta marca o código: `/drugs/Keytruda`) |
+| `GET /landscape` | Panorama competitivo: ensayos por fármaco, fase, año y patrocinador |
+
+Las consultas fijas usan parámetros (`:drug`) en vez de pegar texto en el SQL, para evitar la
+inyección SQL.
+
+**Servidor MCP:** las mismas capacidades como herramientas para agentes de IA. La diferencia:
+una API REST la usa un programa que ya sabe qué llamar; MCP permite que un agente (Claude,
+por ejemplo) **descubra** las herramientas y decida cuándo usarlas. Probado con un cliente MCP
+real por stdio.
+
+## Fase 9 — Interfaz (Streamlit)
+
+Cuatro pestañas, que consumen la API (la interfaz no toca la base de datos):
+
+- **Asistente:** chat con la respuesta, un indicador de verificación (✅ citas verificadas o
+  ⚠️ qué revisar), el SQL usado y tarjetas con las fuentes citadas y su enlace.
+- **Panorama competitivo:** ensayos activos por fármaco, mapa fármaco × fase, ensayos iniciados
+  por año y mecanismo, y principales patrocinadores (Pierre Fabre aparece con 6 ensayos). La
+  paleta de colores se validó para daltonismo; cada gráfico tiene etiquetas y una vista en tabla.
+- **Perfil de fármaco:** fases, estados, patrocinadores, artículos más citados y fichas FDA.
+- **Búsqueda:** búsqueda híbrida con filtros.
+
+Un error encontrado al revisar la interfaz: la cifra principal sumaba ensayos por fármaco
+(1 422) en lugar de contar ensayos distintos (972). Ahora los totales se calculan en SQL.
+
+## Fase 10 — Evaluación de las respuestas y PDFs de congresos
+
+**Evaluación del agente** (`make eval-generation`): 12 preguntas escritas a mano (4 de datos,
+6 de contenido, 2 mixtas). Para las de datos, la respuesta correcta se calculó con SQL escrito
+a mano. La fidelidad la puntúa un LLM juez, que descompone la respuesta en afirmaciones y
+comprueba cuáles están en las fuentes.
+
+| Métrica | Resultado |
+|---|---|
+| Ruta correcta (SQL / búsqueda / ambas) | 12 de 12 |
+| Respuestas con al menos una cita | 12 de 12 |
+| Sin citas a fuentes inexistentes | 12 de 12 |
+| Sin números sin respaldo | 11 de 12 (el fallo era del verificador, ver abajo) |
+| Dato correcto en preguntas con respuesta conocida | 4 de 4 |
+| Fidelidad media (LLM juez) | 84 % |
+| Pertinencia media (LLM juez, 1-5) | 4,7 |
+| Tiempo medio por respuesta | 3,6 s |
+
+Las tres respuestas con fidelidad baja, revisadas a mano:
+
+- **COLUMBUS (0,33): fallo de búsqueda.** Recuperó COLUMBUS-AD (otro ensayo, adyuvante) en lugar
+  de los artículos de resultados, y el agente respondió con honestidad que no tenía datos de
+  supervivencia. El juez penalizó esa frase de «no lo sé», que era correcta.
+- **Dosis de dabrafenib (0,5): error real no detectado.** La búsqueda no trajo la sección de dosis
+  inicial, y las reducciones que dio (1,5 mg, 1 mg) son las de **trametinib**, que aparecen en la
+  misma ficha de la combinación. Ni el juez ni la verificación lo detectaron: un número puede
+  estar en la fuente y aun así referirse a otro fármaco. Además, el verificador marcó «1,5» como
+  sin respaldo porque la fuente escribe «1.5»; ese fallo del verificador ya está corregido.
+- **Ensayos activos con relatlimab (0,29): los 7 ensayos son correctos** (comprobado con SQL); el
+  juez marcó los títulos como no respaldados, probablemente porque solo ve los primeros 9 000
+  caracteres de las fuentes.
+
+Conclusión: el agente no inventa fuentes ni cifras, y dice cuando no sabe; sus fallos vienen
+sobre todo de **la búsqueda** (trae el documento equivocado) y de atribuir un dato a un fármaco
+vecino. El LLM juez es útil como alarma, pero se equivoca en ambos sentidos.
+
+Cuota de Groq: 8 000 tokens por minuto. El evaluador espera 25 s entre preguntas y el cliente
+reintenta y cambia a un modelo de respaldo cuando llega al límite.
+
+**PDFs de congresos** (`make pdfs`): cada página se convierte a texto con `pymupdf4llm`, se
+trocea y se indexa con su número de página, congreso, año y fármacos detectados, de modo que
+la cita puede decir «ESMO 2025, p. 3». Probado de punta a punta con un PDF de ejemplo; la
+carpeta está vacía hasta que se añadan los PDFs reales.
+
+## Limitaciones y siguientes pasos
+
+- **Medir el extractor de IA** (fase 2) contra 30-50 abstracts anotados a mano.
+- **Revisar el conjunto de evaluación sintético** y añadir preguntas reales de analistas.
+- **El juez de fidelidad es el mismo modelo que responde**, así que tiende a ser indulgente;
+  lo ideal es un juez distinto y una muestra revisada por una persona.
+- **Cuota gratuita de Groq:** 8 000 tokens por minuto. Con varios usuarios a la vez haría falta
+  un plan de pago o un modelo local.
+- `trial_drugs` incluye fármacos usados como **comparador**, no solo el experimental.
+- ChEMBL (más sinónimos y fármacos) y bge-m3 (tercer modelo de embeddings) quedan opcionales.
+
 ---
 
 # Glosarios
@@ -362,6 +564,15 @@ es la razón de la búsqueda híbrida (BM25 + vectores) de la fase 5.
 | RAG | Que el LLM conteste usando documentos buscados antes, y los cite |
 | Pydantic | Librería que valida que un dato tenga el formato esperado |
 | Docker | Programa que ejecuta servicios (como Postgres) sin instalarlos a mano |
+| BM25 | Búsqueda por palabras exactas que da más peso a las palabras raras |
+| Búsqueda híbrida | Combinar búsqueda por palabras (BM25) y por significado (embeddings) |
+| Reranker (cross-encoder) | Modelo que lee pregunta y texto juntos para reordenar los resultados |
+| Recall@k / MRR | % de veces que el resultado correcto sale entre los k primeros / premio por salir arriba |
+| Agente | LLM que decide qué herramientas usar (SQL, búsqueda) para responder |
+| LangGraph | Librería para definir un agente como un grafo de pasos |
+| API REST | Forma estándar de ofrecer funciones por HTTP (`GET /trials`) |
+| MCP | Protocolo para que un agente de IA descubra y use herramientas externas |
+| LLM como juez | Usar un LLM para puntuar respuestas de otro (útil, pero con sesgos) |
 
 ## Glosario médico y científico
 

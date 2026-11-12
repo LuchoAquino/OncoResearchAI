@@ -311,8 +311,16 @@ def test_manual_pdf_chunks_keep_page_and_drugs(tmp_path):
         "file,title,congress,year,url\nesmo_poster.pdf,Poster X,ESMO,2025,\n"
     )
     patterns = [
-        (re.compile(r"(?<!\w)encorafenib(?!\w)", re.IGNORECASE), "encorafenib", "encorafenib"),
-        (re.compile(r"(?<!\w)mk-3475(?!\w)", re.IGNORECASE), "mk-3475", "pembrolizumab"),
+        (
+            re.compile(r"(?<!\w)encorafenib(?!\w)", re.IGNORECASE),
+            "encorafenib",
+            "encorafenib",
+        ),
+        (
+            re.compile(r"(?<!\w)mk-3475(?!\w)", re.IGNORECASE),
+            "mk-3475",
+            "pembrolizumab",
+        ),
     ]
     chunks = build_chunks(tmp_path, lambda t: len(t.split()), patterns)
     assert [c.payload["page"] for c in chunks] == [1, 2]
