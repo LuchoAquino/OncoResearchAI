@@ -81,8 +81,8 @@ uv run python -m onco_research_ai.ingestion all          # 3. descarga los datos
 uv run python -m onco_research_ai.storage.load           # 4. los carga en Postgres
 uv run python -m onco_research_ai.processing.extractor --limit 20   # 5. extractor de IA (opcional)
 uv run python -m onco_research_ai.quality.checks         # 6. informe de calidad
-uv run python -m onco_research_ai.retrieval.index --model minilm   # 7. indexa en Qdrant (GPU recomendada)
-uv run python -m onco_research_ai.retrieval.search "resistance to BRAF inhibitors"   # 8. prueba de búsqueda
+uv run python -m onco_research_ai.retrieval.index --model minilm   # 7. indexa en Qdrant (6 min en GPU); también: medcpt (35 min), bge-m3 (~100 min)
+uv run python -m onco_research_ai.retrieval.search "resistance to BRAF inhibitors" --model minilm   # 8. prueba de búsqueda
 uv run pytest                     # tests
 ```
 
