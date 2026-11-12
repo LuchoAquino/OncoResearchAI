@@ -10,14 +10,19 @@ OUT = Path("data/smoke")
 def fetch_page(params: dict, token: str | None = None) -> dict:
     """Pide UNA página de resultados. Si hay token, pide la página que sigue a ese token."""
     if token:
-        params = {**params, "pageToken": token}  # copia: no modificamos el dict original
+        params = {
+            **params,
+            "pageToken": token,
+        }  # copia: no modificamos el dict original
     response = httpx.get(URL, params=params, timeout=30)
     response.raise_for_status()
     return response.json()
 
 
 def nct_ids(page: dict) -> list[str]:
-    return [s["protocolSection"]["identificationModule"]["nctId"] for s in page["studies"]]
+    return [
+        s["protocolSection"]["identificationModule"]["nctId"] for s in page["studies"]
+    ]
 
 
 def main() -> None:
@@ -34,7 +39,9 @@ def main() -> None:
         json.dumps(page1, indent=2, ensure_ascii=False), encoding="utf-8"
     )
     print("totalCount:", page1["totalCount"])
-    token = page1.get("nextPageToken") # Como solo pedimos 5 ensayos, para pedir los de la siguiente pagina, repetimos la consulta + el nextPageToken, hasta que la respuesta ya no traiga el nextPageToken
+    token = page1.get(
+        "nextPageToken"
+    )  # Como solo pedimos 5 ensayos, para pedir los de la siguiente pagina, repetimos la consulta + el nextPageToken, hasta que la respuesta ya no traiga el nextPageToken
     print("nextPageToken:", token)
     for study in page1["studies"]:
         ident = study["protocolSection"]["identificationModule"]

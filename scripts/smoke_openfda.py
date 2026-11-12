@@ -38,7 +38,9 @@ def main() -> None:
     show(page2)
 
     # 2) Una ficha concreta: el fármaco de Pierre Fabre
-    enc = fetch_page({"search": 'openfda.generic_name:"encorafenib"', "limit": 1}, skip=0)
+    enc = fetch_page(
+        {"search": 'openfda.generic_name:"encorafenib"', "limit": 1}, skip=0
+    )
     (OUT / "openfda_encorafenib.json").write_text(
         json.dumps(enc, indent=2, ensure_ascii=False), encoding="utf-8"
     )
@@ -47,7 +49,9 @@ def main() -> None:
     for key, value in label.items():
         if isinstance(value, list) and value and isinstance(value[0], str):
             print(f"  {key}: {len(value[0])} chars")
-    print("\nindications_and_usage[0][:300]:\n", label["indications_and_usage"][0][:300])
+    print(
+        "\nindications_and_usage[0][:300]:\n", label["indications_and_usage"][0][:300]
+    )
 
 
 if __name__ == "__main__":
