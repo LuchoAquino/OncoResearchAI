@@ -189,3 +189,12 @@ def test_parse_partial_date():
     assert parse_partial_date("2024-05-31") == date(2024, 5, 31)
     assert parse_partial_date("20260507") == date(2026, 5, 7)
     assert parse_partial_date(None) is None
+
+
+def test_synonym_pattern_matches_hyphenated_but_not_inside_words():
+    import re
+
+    pat = re.compile(r"(?<!\w)nivolumab(?!\w)", re.IGNORECASE)
+    assert pat.search("vemurafenib-resistant melanoma and nivolumab-treated")
+    assert pat.search("Nivolumab, ipilimumab")
+    assert not pat.search("prenivolumabx")

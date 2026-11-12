@@ -129,9 +129,9 @@ Las cifras se pueden comprobar con SQL; por ejemplo, ensayos con algún fármaco
 - [x] Modelo de datos y tablas en Postgres
 - [x] Carga validada con Pydantic: 3 782 ensayos, 3 883 artículos, 48 fichas
   (`uv run python -m onco_research_ai.storage.load`; se puede repetir: vacía y recarga)
-- [x] Diccionario de 10 fármacos (36 nombres) y vínculo ensayo ↔ fármaco: 969 ensayos enlazados
+- [x] Diccionario de 10 fármacos (36 nombres) y vínculo ensayo ↔ fármaco: 972 ensayos enlazados
 - [x] Vínculo ensayo ↔ artículo: 339 por referencia y 282 por mención del NCT
-- [x] Artículos ↔ fármacos: 3 798 artículos enlazados (1 956 vínculos con el fármaco en el título)
+- [x] Artículos ↔ fármacos: 3 865 artículos enlazados (2 190 vínculos con el fármaco en el título)
 - [x] Fichas ↔ fármacos: 14 de 48 fichas; las otras 34 son de fármacos fuera de nuestros 10 (dacarbazina, atezolizumab, aldesleukina...)
 - [ ] Ampliar sinónimos con ChEMBL (opcional; el diccionario manual basta por ahora)
 - [ ] Extractor con LLM de datos en texto libre (línea de tratamiento, ORR, PFS, n)

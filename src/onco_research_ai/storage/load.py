@@ -130,11 +130,7 @@ def load_all() -> None:
 
 def link_trials_drugs(s: Session) -> None:
     """Un ensayo prueba un fármaco si algún sinónimo aparece como palabra en sus intervenciones."""
-    syns = s.execute(select(DrugSynonym.synonym, DrugSynonym.drug_id)).all()
-    patterns = [
-        (re.compile(rf"(?<![\w-]){re.escape(sy)}(?![\w-])", re.IGNORECASE), sy, d)
-        for sy, d in syns
-    ]
+    patterns = _drug_patterns(s)
     n = 0
     for nct, name, others in s.execute(
         select(
@@ -175,7 +171,7 @@ def _drug_patterns(s: Session) -> list[tuple[re.Pattern, str, int]]:
     """Un patrón por sinónimo: coincide solo con la palabra completa (sin importar mayúsculas)."""
     syns = s.execute(select(DrugSynonym.synonym, DrugSynonym.drug_id)).all()
     return [
-        (re.compile(rf"(?<![\w-]){re.escape(sy)}(?![\w-])", re.IGNORECASE), sy, d)
+        (re.compile(rf"(?<!\w){re.escape(sy)}(?!\w)", re.IGNORECASE), sy, d)
         for sy, d in syns
     ]
 
