@@ -178,3 +178,14 @@ def test_all_errors_run_is_partial(tmp_path):
     assert manifest["status"] == "partial"
     assert manifest["n_errors"] == 2
     assert latest_complete_run("demo", root=tmp_path) is None
+
+
+def test_parse_partial_date():
+    from datetime import date
+
+    from onco_research_ai.processing.schemas import parse_partial_date
+
+    assert parse_partial_date("2024-05") == date(2024, 5, 1)
+    assert parse_partial_date("2024-05-31") == date(2024, 5, 31)
+    assert parse_partial_date("20260507") == date(2026, 5, 7)
+    assert parse_partial_date(None) is None
