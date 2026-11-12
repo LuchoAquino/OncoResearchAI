@@ -216,3 +216,20 @@ def test_unverified_fields_flags_numbers_not_in_abstract():
     assert unverified_fields(ext, abstract) == [
         "n_patients"
     ]  # 945 es la suma, no está escrito
+
+
+def test_dedupe_publications_keeps_published_over_preprint():
+    from onco_research_ai.processing.schemas import PublicationIn
+    from onco_research_ai.storage.load import dedupe_publications
+
+    def pub(id_, source, doi, title="Same Paper"):
+        return PublicationIn(id=id_, source=source, doi=doi, title=title, pub_year=2022)
+
+    out = dedupe_publications(
+        [
+            pub("PPR:1", "PPR", "10.1/x"),
+            pub("MED:1", "MED", "10.1/x"),
+            pub("MED:2", "MED", None, "Other"),
+        ]
+    )
+    assert sorted(p.id for p in out) == ["MED:1", "MED:2"]

@@ -146,6 +146,35 @@ en CheckMate 067 el abstract da tres grupos (n = 314, 316 y 315) y el LLM devolv
 suma; es correcta pero no está escrita, así que quedó marcada como no verificada.
 La tabla no se vacía al recargar los datos, porque cada extracción consume cuota de API.
 
+### Fase 3 — Calidad de datos
+
+Objetivo: saber **cuánto fiarse** de los datos cargados. Cada control es una consulta SQL con
+nombre y explicación (`quality/checks.py`); el informe se genera en `eval/reports/`:
+
+```
+uv run python -m onco_research_ai.quality.checks
+```
+
+| Tipo | Pregunta | Ejemplo |
+|---|---|---|
+| Completitud | ¿Cuántos datos faltan? | 1,0 % de ensayos sin fecha de inicio; 43,8 % de fichas sin nombre de marca |
+| Consistencia | ¿Hay datos imposibles? (debe ser 0) | Ensayo que termina antes de empezar |
+| Duplicados | ¿Está algo repetido? (debe ser 0) | Mismo artículo como preprint y como versión publicada |
+| Pertinencia | ¿Cuánto es ruido? | 8,8 % de ensayos no nombra «melanoma» (suelen ser «Solid Tumors») |
+| Alineación | ¿Qué parte quedó enlazada? | 25,7 % de ensayos con fármaco; 99,5 % de artículos |
+
+Lo que encontró el primer informe:
+
+- **Falsa alarma:** 139 ensayos con tamaño 0. Eran todos `WITHDRAWN` (cancelados antes de
+  reclutar), donde 0 es correcto. Se corrigió el control, no los datos.
+- **Duplicados reales:** el mismo artículo como preprint (`PPR`) y como versión publicada
+  (`MED`) con DOI distinto. Se detectan por título+año normalizados y se conserva la versión de
+  PubMed (45 eliminados). Un primer desempate dejaba registros de Agricola sin DOI en lugar de
+  los de PubMed; lo detectó una revisión manual.
+- Solo el 6,3 % de los ensayos tiene un artículo enlazado: el enlace es fiable pero escaso.
+
+Pendiente: medir la precisión del extractor LLM contra una muestra anotada a mano.
+
 ## Glosario médico y científico
 
 **La enfermedad**

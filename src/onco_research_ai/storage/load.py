@@ -84,6 +84,7 @@ def load_all() -> None:
     labels = _validated(_records(runs["openfda"], ("results",)), LabelIn, "labels")
     # Europe PMC puede repetir un id entre páginas: nos quedamos con uno.
     pubs = list({p.id: p for p in pubs}.values())
+    pubs = dedupe_publications(pubs)
 
     with Session(get_engine()) as s, s.begin():
         for table in (
@@ -165,6 +166,32 @@ def link_trials_publications(
         TrialPublication(nct_id=a, publication_id=b, link_type=c) for a, b, c in links
     )
     logger.info("trial_publications: %d vínculos", len(links))
+
+
+def dedupe_publications(pubs: list[PublicationIn]) -> list[PublicationIn]:
+    """Un mismo artículo puede venir como preprint (PPR) y como versión publicada (MED).
+
+    Se detecta por DOI o por título+año normalizados; se conserva la versión de PubMed.
+    """
+
+    def title_key(p):
+        return (re.sub(r"[^a-z0-9]", "", p.title.lower()), p.pub_year)
+
+    kept: dict[str, PublicationIn] = {}
+    priority = {
+        "MED": 0,
+        "PPR": 2,
+    }  # PubMed primero, preprints al final, el resto en medio
+    for p in sorted(pubs, key=lambda p: priority.get(p.source, 1)):
+        keys = [f"title:{title_key(p)}"] + ([f"doi:{p.doi}"] if p.doi else [])
+        if not any(k in kept for k in keys):
+            for k in keys:
+                kept[k] = p
+    unique = list({p.id: p for p in kept.values()}.values())
+    logger.info(
+        "pubs: %d tras quitar %d duplicados", len(unique), len(pubs) - len(unique)
+    )
+    return unique
 
 
 def _drug_patterns(s: Session) -> list[tuple[re.Pattern, str, int]]:
