@@ -7,7 +7,17 @@ Convenciones:
 
 from datetime import date
 
-from sqlalchemy import ARRAY, Boolean, Date, ForeignKey, Integer, String, Text
+from sqlalchemy import (
+    ARRAY,
+    JSON,
+    Boolean,
+    Date,
+    Float,
+    ForeignKey,
+    Integer,
+    String,
+    Text,
+)
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 
@@ -203,3 +213,24 @@ class LabelDrug(Base):
     matched_text: Mapped[str] = mapped_column(Text)
     # "openfda_name" (nombre del bloque openfda) o "text" (buscado en el texto de la ficha)
     match_source: Mapped[str] = mapped_column(String(16))
+
+
+class PublicationExtraction(Base):
+    """Datos sacados de un abstract por un LLM. Es un dato DERIVADO y de pago (cuota de API):
+    por eso no lleva FK a publications y `load` no la vacía al recargar los datos crudos."""
+
+    __tablename__ = "publication_extractions"
+
+    publication_id: Mapped[str] = mapped_column(String(32), primary_key=True)
+    model: Mapped[str] = mapped_column(String(64))
+    study_kind: Mapped[str | None] = mapped_column(String(24))
+    treatment_line: Mapped[str | None] = mapped_column(String(24))
+    n_patients: Mapped[int | None] = mapped_column(Integer)
+    orr_percent: Mapped[float | None] = mapped_column(Float)
+    pfs_months: Mapped[float | None] = mapped_column(Float)
+    os_months: Mapped[float | None] = mapped_column(Float)
+    # Campos numéricos cuya cifra NO aparece literalmente en el abstract (posible invento).
+    unverified_fields: Mapped[list[str]] = mapped_column(
+        ARRAY(String(16)), default=list
+    )
+    raw_output: Mapped[dict] = mapped_column(JSON)

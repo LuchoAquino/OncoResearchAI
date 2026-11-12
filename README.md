@@ -134,7 +134,17 @@ Las cifras se pueden comprobar con SQL; por ejemplo, ensayos con algún fármaco
 - [x] Artículos ↔ fármacos: 3 865 artículos enlazados (2 190 vínculos con el fármaco en el título)
 - [x] Fichas ↔ fármacos: 14 de 48 fichas; las otras 34 son de fármacos fuera de nuestros 10 (dacarbazina, atezolizumab, aldesleukina...)
 - [ ] Ampliar sinónimos con ChEMBL (opcional; el diccionario manual basta por ahora)
-- [ ] Extractor con LLM de datos en texto libre (línea de tratamiento, ORR, PFS, n)
+- [x] Extractor con LLM (`processing/extractor.py`, Groq `gpt-oss-120b` vía LiteLLM): del abstract saca
+  tipo de estudio, línea de tratamiento, n, ORR, PFS y OS en `publication_extractions`
+  (`uv run python -m onco_research_ai.processing.extractor --limit N`)
+
+**El extractor y las alucinaciones.** Un LLM puede inventar un dato que no está en el texto, así
+que hay tres defensas: el prompt exige `null` si el dato no aparece; Pydantic rechaza valores
+fuera del formulario (p. ej. una línea de tratamiento inexistente); y cada cifra devuelta debe
+aparecer **literalmente** en el abstract, si no se anota en `unverified_fields`. Ejemplo real:
+en CheckMate 067 el abstract da tres grupos (n = 314, 316 y 315) y el LLM devolvió n = 945, la
+suma; es correcta pero no está escrita, así que quedó marcada como no verificada.
+La tabla no se vacía al recargar los datos, porque cada extracción consume cuota de API.
 
 ## Glosario médico y científico
 

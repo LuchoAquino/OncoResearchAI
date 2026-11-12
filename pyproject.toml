@@ -9,6 +9,7 @@ authors = [
 requires-python = ">=3.12"
 dependencies = [
     "httpx>=0.28.1",
+    "litellm>=1.109.1",
     "psycopg[binary]>=3.3.8",
     "pydantic-settings>=2.16.2",
     "qdrant-client>=1.20.0",

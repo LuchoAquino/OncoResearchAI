@@ -198,3 +198,21 @@ def test_synonym_pattern_matches_hyphenated_but_not_inside_words():
     assert pat.search("vemurafenib-resistant melanoma and nivolumab-treated")
     assert pat.search("Nivolumab, ipilimumab")
     assert not pat.search("prenivolumabx")
+
+
+def test_unverified_fields_flags_numbers_not_in_abstract():
+    from onco_research_ai.processing.extractor import Extraction, unverified_fields
+
+    abstract = (
+        "n = 314, n = 316 and n = 315 patients. Median OS was 72.1 months. ORR 46,5%."
+    )
+    ext = Extraction(
+        study_kind="randomized_trial",
+        treatment_line="first_line",
+        n_patients=945,
+        os_months=72.1,
+        orr_percent=46.5,
+    )
+    assert unverified_fields(ext, abstract) == [
+        "n_patients"
+    ]  # 945 es la suma, no está escrito

@@ -10,6 +10,7 @@ class Settings(BaseSettings):
     postgres_db: str
     postgres_port: int = 5432
     qdrant_http_port: int = 6333
+    groq_api_key: str = ""
 
     @property
     def postgres_url(self) -> URL:
