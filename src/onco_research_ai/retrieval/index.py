@@ -12,7 +12,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from onco_research_ai.processing.chunking import Chunk, split_text
-from onco_research_ai.retrieval.embedder import Embedder, chunk_token_counter
+from onco_research_ai.retrieval.embedder import MODELS, Embedder, chunk_token_counter
 from onco_research_ai.storage import vectorstore
 from onco_research_ai.storage.db import get_engine
 from onco_research_ai.storage.models import (
@@ -162,7 +162,7 @@ if __name__ == "__main__":
     from onco_research_ai.logging_config import setup_logging
 
     ap = argparse.ArgumentParser()
-    ap.add_argument("--model", default="minilm", choices=["minilm", "bge-m3"])
+    ap.add_argument("--model", default="minilm", choices=list(MODELS))
     ap.add_argument("--batch", type=int, default=256)
     args = ap.parse_args()
     setup_logging()

@@ -47,7 +47,7 @@ Fabre) frente a sus competidores en melanoma con mutación BRAF.
 | 1 | Descargar todos los datos de forma fiable | ✔ Hecha (falta ChEMBL, opcional) |
 | 2 | Ordenar los datos en tablas y enlazarlos entre sí | ✔ Hecha |
 | 3 | Controles de calidad de los datos | ✔ Hecha (falta medir el extractor de IA) |
-| 4 | Indexar los textos en la base vectorial | ✔ Hecha (falta comparar modelos, en la fase 5) |
+| 4 | Indexar los textos en la base vectorial | ✔ Hecha con MiniLM y MedCPT (bge-m3 pendiente) |
 | 5 | Búsqueda de documentos y su evaluación | Pendiente |
 | 6 | Respuestas con citas de las fuentes | Pendiente |
 | 7 | Agente que elige cómo buscar | Pendiente |
@@ -315,6 +315,17 @@ vectores dentro de Postgres.
 
 El identificador de cada trozo se calcula a partir del documento y su posición, así que
 reindexar sobrescribe en vez de duplicar. Indexar con MiniLM en una GTX 1650 tarda unos 6 minutos.
+
+### Modelos indexados
+
+Los dos modelos usan exactamente los mismos 25 076 trozos (se trocea con un tokenizador común),
+para poder compararlos con justicia en la fase 5.
+
+| Modelo | Tipo | Vector | Tiempo de indexación (GTX 1650) |
+|---|---|---|---|
+| MiniLM (`all-MiniLM-L6-v2`) | General, 22 M parámetros | 384 | 6 min |
+| MedCPT (NCBI) | Biomédico, entrenado con búsquedas de PubMed; usa un modelo para los textos y otro para las preguntas | 768 | 34,5 min |
+| bge-m3 | General multilingüe, 570 M parámetros | 1 024 | Pendiente (~100 min estimados) |
 
 ### Ejemplos de búsqueda
 

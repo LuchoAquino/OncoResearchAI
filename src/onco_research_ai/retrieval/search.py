@@ -22,7 +22,7 @@ if __name__ == "__main__":
     hits = vectorstore.search(
         vectorstore.get_client(),
         vectorstore.collection_name(a.model),
-        emb.encode([a.query])[0],
+        emb.encode_queries([a.query])[0],
         k=a.k,
         source=a.source,
         drugs=a.drug,
