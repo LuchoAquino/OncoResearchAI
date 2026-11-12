@@ -1,0 +1,23 @@
+[project]
+name = "onco-research-ai"
+version = "0.1.0"
+description = "RAG + agents + MCP platform for competitive intelligence in melanoma"
+readme = "README.md"
+authors = [
+    { name = "Lucho Aquino", email = "luis.gonzales.a@uni.pe" }
+]
+requires-python = ">=3.12"
+dependencies = []
+
+[project.scripts]
+onco-research-ai = "onco_research_ai:main"
+
+[build-system]
+requires = ["uv_build>=0.12.8,<0.13.0"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "pytest>=9.2.0",
+    "ruff>=0.17.4",
+]

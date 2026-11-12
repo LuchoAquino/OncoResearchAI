@@ -1,0 +1,8 @@
+.venv/
+src/onco_research_ai/__pycache__/
+
+*.pyc
+.env
+data/
+.ruff_cache/
+.pytest_chache/
