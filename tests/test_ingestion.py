@@ -233,3 +233,24 @@ def test_dedupe_publications_keeps_published_over_preprint():
         ]
     )
     assert sorted(p.id for p in out) == ["MED:1", "MED:2"]
+
+
+def test_split_text_respects_limit_and_overlaps_one_sentence():
+    from onco_research_ai.processing.chunking import split_text
+
+    count = lambda s: len(s.split())
+    text = "Aaa bbb ccc. Ddd eee fff. Ggg hhh iii. Jjj kkk lll."
+    chunks = split_text(text, count, max_tokens=7, overlap=1)
+    assert chunks == [
+        "Aaa bbb ccc. Ddd eee fff.",
+        "Ddd eee fff. Ggg hhh iii.",
+        "Ggg hhh iii. Jjj kkk lll.",
+    ]
+    assert all(count(c) <= 7 for c in chunks)
+
+
+def test_chunk_point_id_is_deterministic():
+    from onco_research_ai.processing.chunking import Chunk
+
+    assert Chunk("NCT1", 0, "x").point_id == Chunk("NCT1", 0, "otro texto").point_id
+    assert Chunk("NCT1", 0, "x").point_id != Chunk("NCT1", 1, "x").point_id

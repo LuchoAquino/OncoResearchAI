@@ -47,7 +47,7 @@ Fabre) frente a sus competidores en melanoma con mutación BRAF.
 | 1 | Descargar todos los datos de forma fiable | ✔ Hecha (falta ChEMBL, opcional) |
 | 2 | Ordenar los datos en tablas y enlazarlos entre sí | ✔ Hecha |
 | 3 | Controles de calidad de los datos | ✔ Hecha (falta medir el extractor de IA) |
-| 4 | Indexar los textos en la base vectorial | Pendiente |
+| 4 | Indexar los textos en la base vectorial | ✔ Hecha (falta comparar modelos, en la fase 5) |
 | 5 | Búsqueda de documentos y su evaluación | Pendiente |
 | 6 | Respuestas con citas de las fuentes | Pendiente |
 | 7 | Agente que elige cómo buscar | Pendiente |
@@ -81,6 +81,8 @@ uv run python -m onco_research_ai.ingestion all          # 3. descarga los datos
 uv run python -m onco_research_ai.storage.load           # 4. los carga en Postgres
 uv run python -m onco_research_ai.processing.extractor --limit 20   # 5. extractor de IA (opcional)
 uv run python -m onco_research_ai.quality.checks         # 6. informe de calidad
+uv run python -m onco_research_ai.retrieval.index --model minilm   # 7. indexa en Qdrant (GPU recomendada)
+uv run python -m onco_research_ai.retrieval.search "resistance to BRAF inhibitors"   # 8. prueba de búsqueda
 uv run pytest                     # tests
 ```
 
@@ -96,6 +98,7 @@ src/onco_research_ai/
   processing/   limpieza, validación, diccionario de fármacos y extractor de IA
   storage/      tablas de Postgres y carga de datos
   quality/      controles de calidad
+  retrieval/    embeddings, indexación en Qdrant y búsqueda
 docs/decisions/ por qué se eligió cada herramienta o fuente
 eval/reports/   informes de calidad generados
 scripts/        pruebas rápidas de cada API
@@ -264,6 +267,67 @@ Lo que encontró el primer informe:
 **Pendiente:** medir qué porcentaje de las extracciones de la IA son correctas, comparándolas
 con una muestra revisada a mano.
 
+## Fase 4 — Indexación vectorial
+
+**Objetivo:** que se pueda buscar por **significado** y no solo por palabras exactas.
+
+```
+Postgres ─► chunking.py ─► embedder.py ─► vectorstore.py (Qdrant)
+ filas       trozos de       vectores        colección con vectores
+            ≤180 tokens     de 384 números  + metadatos para filtrar y citar
+```
+
+### Conceptos
+
+- **Embedding:** un texto convertido en una lista de números (384 con MiniLM, 1 024 con
+  bge-m3). Los textos de significado parecido quedan cerca. Con MiniLM, dos frases sobre el
+  mismo tratamiento escritas con palabras distintas puntúan 0,68; una frase y una receta de
+  cocina, −0,06.
+- **Similitud coseno:** mide el ángulo entre dos vectores (1 = misma dirección, 0 = sin relación).
+- **Token:** el modelo no lee palabras sino trozos de palabra. «encorafenib» se rompe en 5
+  trozos (`en ##cor ##af ##eni ##b`): un modelo general apenas conoce los nombres de fármacos.
+- **Límite de tokens:** MiniLM lee como máximo 256 tokens y descarta el resto sin avisar. El
+  86,7 % de los abstracts lo superan (mediana: 402), así que se pierde casi siempre la segunda
+  mitad, donde están los resultados.
+- **Chunking:** por eso los textos se trocean (≤180 tokens, cortando entre frases y con una
+  frase de solapamiento). Además, un vector por trozo es más preciso que uno por abstract
+  completo, que mezcla varias ideas.
+- **Qdrant:** base de datos de vectores. Cada trozo es un *punto* (vector + *payload* con
+  metadatos) dentro de una *colección*. El payload permite combinar significado y filtros
+  exactos: «los trozos más parecidos a mi pregunta, pero solo ensayos de fase 3 con encorafenib».
+- **HNSW:** índice que evita comparar con todos los vectores. Con 25 000 trozos Qdrant aún
+  compara con todos (es instantáneo); el índice solo importa con millones.
+
+**¿Por qué Qdrant y no Chroma, FAISS o pgvector?** Con este volumen cualquiera valdría. Se
+eligió Qdrant porque funciona como un servidor independiente, filtra por metadatos y admite
+búsqueda híbrida (palabras exactas + significado), que es como se hace en producción. Chroma es
+más sencillo y bueno para prototipos; FAISS es solo una librería de índices; pgvector guarda los
+vectores dentro de Postgres.
+
+### Qué se indexa
+
+| Origen | Cómo se trocea | Trozos | Metadatos (payload) |
+|---|---|---|---|
+| Ensayos | título + resumen | 5 542 | fase, estado, patrocinador, año, fármacos, enlace |
+| Artículos | abstract en trozos, con el título delante de cada uno | 12 404 | año, revista, fármacos, enlace |
+| Fichas FDA | cada sección en trozos con el nombre del fármaco delante | 7 130 | sección, fármacos, enlace |
+| **Total** | | **25 076** | |
+
+El identificador de cada trozo se calcula a partir del documento y su posición, así que
+reindexar sobrescribe en vez de duplicar. Indexar con MiniLM en una GTX 1650 tarda unos 6 minutos.
+
+### Ejemplos de búsqueda
+
+| Pregunta | Resultado |
+|---|---|
+| «how do melanoma cells become resistant to BRAF inhibitors» | Tres revisiones sobre resistencia a BRAF, aunque ninguna usa esas palabras exactas |
+| «recommended dose of encorafenib» (sin filtro) | Salió la ficha de MEKTOVI, que solo cita a encorafenib de pasada |
+| La misma, con filtro `--drug encorafenib` | Salen las secciones de dosis de la ficha de BRAFTOVI |
+| «MK-3475» | Encuentra los ensayos que escriben ese código, pero no los de pembrolizumab que usan el nombre; y los resultados 3.º y 4.º ya no tienen relación |
+
+El último caso es la limitación esperada de la búsqueda por significado con nombres propios, y
+es la razón de la búsqueda híbrida (BM25 + vectores) de la fase 5.
+
 ---
 
 # Glosarios
@@ -279,6 +343,9 @@ con una muestra revisada a mano.
 | Base relacional | Datos en tablas con filas y columnas, consultables con SQL |
 | Base vectorial | Guarda el significado de un texto como números para buscar por parecido |
 | Tabla de cruce | Tabla que enlaza dos tablas («este ensayo usa este fármaco») |
+| Embedding | Texto convertido en una lista de números que representa su significado |
+| Token | Trozo de palabra que lee un modelo; los límites de longitud se miden en tokens |
+| Chunk | Fragmento de un texto largo, del tamaño que cabe en el modelo |
 | LLM | Modelo de lenguaje (tipo ChatGPT) |
 | Alucinación | Cuando un LLM inventa algo que no está en la fuente |
 | RAG | Que el LLM conteste usando documentos buscados antes, y los cite |
