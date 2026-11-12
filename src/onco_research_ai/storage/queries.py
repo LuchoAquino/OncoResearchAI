@@ -156,7 +156,16 @@ def drug_profile(name: str) -> dict | None:
 def landscape() -> dict:
     """Panorama competitivo: ensayos por fármaco × fase, estado, año y patrocinador."""
     join = "from trials t join trial_drugs td on td.nct_id = t.nct_id join drugs d on d.id = td.drug_id"
+    active = "('RECRUITING','NOT_YET_RECRUITING','ACTIVE_NOT_RECRUITING','ENROLLING_BY_INVITATION')"
+    totals = _rows(
+        f"select count(distinct t.nct_id) n_trials, "
+        f"count(distinct t.nct_id) filter (where t.overall_status in {active}) n_active, "
+        f"count(distinct t.nct_id) filter (where t.overall_status in {active} and d.mechanism like 'anti-%') n_active_io, "
+        f"count(distinct t.nct_id) filter (where t.overall_status in {active} and d.mechanism like '%inhibitor') n_active_targeted "
+        f"{join}"
+    )[0]
     return {
+        "totals": totals,  # ensayos DISTINTOS (un ensayo con 2 fármacos cuenta una vez)
         "by_phase": _rows(
             f"select d.canonical_name drug, d.mechanism, coalesce(ph, 'NO_PHASE') phase, "
             f"count(distinct t.nct_id) n {join} left join lateral unnest(t.phases) ph on true "
