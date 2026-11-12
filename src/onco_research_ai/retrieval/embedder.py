@@ -3,6 +3,7 @@
 import numpy as np
 import torch
 from sentence_transformers import SentenceTransformer
+from transformers import AutoTokenizer
 
 # Nombre corto -> modelo. Se añaden aquí los que queramos comparar en la Fase 5.
 MODELS = {
@@ -38,3 +39,14 @@ class Embedder:
             normalize_embeddings=True,
             show_progress_bar=progress,
         )
+
+
+def chunk_token_counter():
+    """Contador de tokens para TROCEAR, igual para todos los modelos.
+
+    Si cada modelo troceara con su propio tokenizador, cada colección tendría trozos distintos
+    y la comparación de modelos no sería justa. Se usa el de MiniLM (el más restrictivo: 256
+    tokens), y como los trozos son de ≤180, caben holgadamente en bge-m3 (hasta 8 192).
+    """
+    tok = AutoTokenizer.from_pretrained(MODELS["minilm"])
+    return lambda text: len(tok(text, add_special_tokens=False)["input_ids"])

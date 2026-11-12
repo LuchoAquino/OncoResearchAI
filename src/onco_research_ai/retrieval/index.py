@@ -12,7 +12,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from onco_research_ai.processing.chunking import Chunk, split_text
-from onco_research_ai.retrieval.embedder import Embedder
+from onco_research_ai.retrieval.embedder import Embedder, chunk_token_counter
 from onco_research_ai.storage import vectorstore
 from onco_research_ai.storage.db import get_engine
 from onco_research_ai.storage.models import (
@@ -124,7 +124,9 @@ def build_chunks(s: Session, count) -> list[Chunk]:
 def main(model_key: str, batch: int) -> None:
     emb = Embedder(model_key)
     with Session(get_engine()) as s:
-        chunks = build_chunks(s, emb.count_tokens)
+        chunks = build_chunks(
+            s, chunk_token_counter()
+        )  # mismos trozos para todos los modelos
     by_source = defaultdict(int)
     for c in chunks:
         by_source[c.payload["source"]] += 1
