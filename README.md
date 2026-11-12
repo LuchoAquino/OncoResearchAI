@@ -99,7 +99,7 @@ Cada tabla es una lista de cosas de un mismo tipo. Las tablas de cruce son lista
 | `publications` | Europe PMC (registro bibliográfico: título, abstract, revista) | Artículo con su PMID y DOI |
 | `labels`, `label_sections` | openFDA (ficha técnica oficial, dividida por secciones) | Ficha de BRAFTOVI → sección «indications_and_usage» |
 | `drugs`, `drug_synonyms` | **Escritas a mano** (`processing/drugs_seed.py`); ChEMBL las ampliará | encorafenib ← braftovi, lgx818 |
-| `trial_drugs`, `trial_publications` | **Calculadas** al cargar, cruzando las anteriores | NCT04657991 ↔ encorafenib |
+| `trial_drugs`, `trial_publications`, `publication_drugs`, `label_drugs` | **Calculadas** al cargar, cruzando las anteriores | NCT04657991 ↔ encorafenib |
 
 Cada fila de `trials`, `publications` y `labels` guarda en `source_run` la carpeta de
 `data/raw/` de la que salió (trazabilidad).
@@ -111,8 +111,8 @@ se conecta a `drugs` con el dato que sí trae.
 
 ```
 Ensayo ──────► Fármaco     ✔ comparando sus intervenciones con los sinónimos
-Artículo ────► Fármaco     ✘ pendiente (buscar sinónimos en título y abstract)
-Ficha FDA ───► Fármaco     ✘ pendiente (nombre del bloque `openfda`; 21 de 48 fichas no lo traen)
+Artículo ────► Fármaco     ✔ sinónimos en título o abstract (`publication_drugs`; `in_title` marca si está en el título)
+Ficha FDA ───► Fármaco     ✔ por el bloque `openfda`; si falta, por el texto (`label_drugs`)
 Ensayo ◄───► Artículo      ✔ por dos rutas (ver abajo)
 ```
 
@@ -131,8 +131,9 @@ Las cifras se pueden comprobar con SQL; por ejemplo, ensayos con algún fármaco
   (`uv run python -m onco_research_ai.storage.load`; se puede repetir: vacía y recarga)
 - [x] Diccionario de 10 fármacos (36 nombres) y vínculo ensayo ↔ fármaco: 969 ensayos enlazados
 - [x] Vínculo ensayo ↔ artículo: 339 por referencia y 282 por mención del NCT
-- [ ] Vincular artículos y fichas FDA con los fármacos
-- [ ] Ampliar sinónimos con ChEMBL (servidor caído)
+- [x] Artículos ↔ fármacos: 3 798 artículos enlazados (1 956 vínculos con el fármaco en el título)
+- [x] Fichas ↔ fármacos: 14 de 48 fichas; las otras 34 son de fármacos fuera de nuestros 10 (dacarbazina, atezolizumab, aldesleukina...)
+- [ ] Ampliar sinónimos con ChEMBL (opcional; el diccionario manual basta por ahora)
 - [ ] Extractor con LLM de datos en texto libre (línea de tratamiento, ORR, PFS, n)
 
 ## Glosario médico y científico

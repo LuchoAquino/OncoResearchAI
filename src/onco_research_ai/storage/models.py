@@ -174,3 +174,32 @@ class TrialDrug(Base):
     matched_text: Mapped[str] = mapped_column(
         Text
     )  # qué texto del ensayo provocó el vínculo
+
+
+class PublicationDrug(Base):
+    __tablename__ = "publication_drugs"
+
+    publication_id: Mapped[str] = mapped_column(
+        ForeignKey("publications.id", ondelete="CASCADE"), primary_key=True
+    )
+    drug_id: Mapped[int] = mapped_column(
+        ForeignKey("drugs.id", ondelete="CASCADE"), primary_key=True
+    )
+    matched_text: Mapped[str] = mapped_column(Text)
+    # Si el fármaco está en el título, el artículo trata de él; si solo está en el
+    # abstract, puede ser una mención de pasada (comparación, contexto).
+    in_title: Mapped[bool] = mapped_column(Boolean)
+
+
+class LabelDrug(Base):
+    __tablename__ = "label_drugs"
+
+    set_id: Mapped[str] = mapped_column(
+        ForeignKey("labels.set_id", ondelete="CASCADE"), primary_key=True
+    )
+    drug_id: Mapped[int] = mapped_column(
+        ForeignKey("drugs.id", ondelete="CASCADE"), primary_key=True
+    )
+    matched_text: Mapped[str] = mapped_column(Text)
+    # "openfda_name" (nombre del bloque openfda) o "text" (buscado en el texto de la ficha)
+    match_source: Mapped[str] = mapped_column(String(16))

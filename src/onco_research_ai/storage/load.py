@@ -17,8 +17,10 @@ from onco_research_ai.storage.models import (
     Drug,
     DrugSynonym,
     Label,
+    LabelDrug,
     LabelSection,
     Publication,
+    PublicationDrug,
     Trial,
     TrialDrug,
     TrialIntervention,
@@ -85,6 +87,8 @@ def load_all() -> None:
 
     with Session(get_engine()) as s, s.begin():
         for table in (
+            LabelDrug,
+            PublicationDrug,
             TrialPublication,
             TrialDrug,
             TrialIntervention,
@@ -120,6 +124,8 @@ def load_all() -> None:
         s.flush()
         link_trials_drugs(s)
         link_trials_publications(s, trials, pubs)
+        link_publications_drugs(s, pubs)
+        link_labels_drugs(s, labels)
 
 
 def link_trials_drugs(s: Session) -> None:
@@ -163,6 +169,64 @@ def link_trials_publications(
         TrialPublication(nct_id=a, publication_id=b, link_type=c) for a, b, c in links
     )
     logger.info("trial_publications: %d vínculos", len(links))
+
+
+def _drug_patterns(s: Session) -> list[tuple[re.Pattern, str, int]]:
+    """Un patrón por sinónimo: coincide solo con la palabra completa (sin importar mayúsculas)."""
+    syns = s.execute(select(DrugSynonym.synonym, DrugSynonym.drug_id)).all()
+    return [
+        (re.compile(rf"(?<![\w-]){re.escape(sy)}(?![\w-])", re.IGNORECASE), sy, d)
+        for sy, d in syns
+    ]
+
+
+def link_publications_drugs(s: Session, pubs: list[PublicationIn]) -> None:
+    """Un artículo se enlaza a un fármaco si algún sinónimo aparece en su título o abstract."""
+    patterns = _drug_patterns(s)
+    rows = {}
+    for p in pubs:
+        for pat, sy, drug_id in patterns:
+            if (key := (p.id, drug_id)) not in rows:
+                in_title = bool(pat.search(p.title))
+                if in_title or (p.abstract and pat.search(p.abstract)):
+                    rows[key] = PublicationDrug(
+                        publication_id=p.id,
+                        drug_id=drug_id,
+                        matched_text=sy,
+                        in_title=in_title,
+                    )
+    s.add_all(rows.values())
+    logger.info("publication_drugs: %d vínculos", len(rows))
+
+
+def link_labels_drugs(s: Session, labels: list[LabelIn]) -> None:
+    """Ficha -> fármaco por el nombre del bloque openfda; si falta, por el texto de la ficha."""
+    patterns = _drug_patterns(s)
+    n = 0
+    for lab in labels:
+        names = " | ".join(x for x in (lab.generic_name, lab.brand_name) if x)
+        source, text = (
+            ("openfda_name", names)
+            if names
+            else (
+                "text",
+                lab.sections.get("indications_and_usage", "")[:300],
+            )
+        )
+        seen = set()
+        for pat, sy, drug_id in patterns:
+            if drug_id not in seen and pat.search(text):
+                seen.add(drug_id)
+                s.add(
+                    LabelDrug(
+                        set_id=lab.set_id,
+                        drug_id=drug_id,
+                        matched_text=sy,
+                        match_source=source,
+                    )
+                )
+                n += 1
+    logger.info("label_drugs: %d vínculos", n)
 
 
 if __name__ == "__main__":
