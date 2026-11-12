@@ -65,7 +65,7 @@ class Retriever:
 
     def __init__(
         self,
-        model_key: str = "medcpt",
+        model_key: str = "minilm",  # ganador de la evaluación (eval/reports/retrieval_*.md)
         mode: str = "hybrid",
         rerank: bool = True,
         candidates: int = 50,
