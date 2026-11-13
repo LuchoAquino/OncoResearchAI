@@ -487,8 +487,12 @@ por primera vez: cada pestaña explica qué hace y qué esperar.
 - **Perfil de fármaco:** fases, estados, patrocinadores, artículos más citados y fichas FDA.
 - **Buscar documentos:** búsqueda híbrida con filtros, sin redactar respuesta.
 
-Identidad visual: tono clínico (verde azulado y grises de ese matiz), tipografía IBM Plex y los
-códigos de registro (NCT, PMID) en monoespaciada (`.streamlit/config.toml` y el CSS de la app).
+Identidad visual: el sistema lo dio la skill de diseño `design-taste-frontend`
+([Taste Skill](https://github.com/Leonxlnx/taste-skill)), con su generador de paletas para el
+sector clínico: tinta azul marino sobre blanco, acento naranja solo en marcas y rellenos (como
+texto no se lee: 2,3:1 de contraste), Host Grotesk para leer y JetBrains Mono para los códigos.
+El texto de lectura va a 16 px, porque la primera versión, con letras de 13-14 px y gris
+semitransparente, se leía mal (`.streamlit/config.toml` y el CSS de la app).
 
 Errores encontrados al revisar la interfaz con capturas: la cifra principal sumaba ensayos por
 fármaco (1 422) en lugar de contar ensayos distintos (972), y una cita escrita como `[S1, S2]`

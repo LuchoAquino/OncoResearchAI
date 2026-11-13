@@ -17,71 +17,92 @@ st.set_page_config(
 )
 
 # ---------------------------------------------------------------- identidad visual
-# Concepto: herramienta clínica de consulta. Una sola columna de trabajo, la respuesta
-# primero y sus fuentes al lado; los códigos de registro (NCT, PMID) en monoespaciada.
+# Sistema dado por la skill design-taste-frontend (start.mjs deal: palette white-navy-tab,
+# type host): tinta azul marino sobre blanco, acento naranja SOLO en rellenos y marcas (como
+# texto tendría 2,3:1 de contraste), Host Grotesk para leer y JetBrains Mono para los códigos.
+# Texto de lectura a 16 px; nada por debajo de 13 px.
 DARK = st.context.theme.type == "dark"
-T = {  # tokens
-    "bg": "#0f1719" if DARK else "#f5f7f7",
-    "surface": "#162125" if DARK else "#ffffff",
-    "ink": "#e6eeef" if DARK else "#17252a",
-    "muted": "#9aaeb2" if DARK else "#5b6b70",
-    "line": "#26363a" if DARK else "#dde4e5",
-    "accent": "#4fb3bd" if DARK else "#0e6b74",
-    "accent_soft": "#1b3236" if DARK else "#e2f0f1",
-    "ok": "#4cc38a" if DARK else "#1f7a4d",
-    "ok_soft": "#173026" if DARK else "#e3f3ea",
-    "warn": "#e9a23b" if DARK else "#9a5b06",
-    "warn_soft": "#33280f" if DARK else "#fbf0dc",
+T = {  # tokens (los oscuros son la variante "inv" de la misma paleta)
+    "bg": "#05070a" if DARK else "#ffffff",
+    "surface": "#111417" if DARK else "#f4f4f2",
+    "card": "#0b0e11" if DARK else "#ffffff",
+    "ink": "#ffffff" if DARK else "#1f2b4d",
+    "muted": "#a3a7ab" if DARK else "#646b81",
+    "line": "#23272b" if DARK else "#e2e2dd",
+    "accent": "#f7941d",  # naranja: bordes, marcas, rellenos; nunca texto
+    "info_soft": "#1a2233" if DARK else "#eceff6",
+    "ok": "#5fd39a" if DARK else "#1d6b45",
+    "ok_soft": "#10291d" if DARK else "#e4f2ea",
+    "warn": "#f5b86a" if DARK else "#8a4b00",
+    "warn_soft": "#2e2110" if DARK else "#fdf0dd",
 }
 st.markdown(
     f"""
 <style>
-@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Host+Grotesk:wght@400..700&family=JetBrains+Mono:wght@400..500&display=swap');
 html, body, .stApp, p, li, label, input, textarea, [data-testid="stMarkdownContainer"] {{
-  font-family: 'IBM Plex Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  font-family: 'Host Grotesk', system-ui, -apple-system, 'Segoe UI', sans-serif;
 }}
-h1, h2, h3 {{ font-family: 'IBM Plex Sans', system-ui, sans-serif; font-weight: 600 !important;
-  letter-spacing: -0.01em; text-wrap: balance; }}
-.block-container {{ padding-top: 2.2rem; max-width: 1240px; }}
+.stApp, [data-testid="stMarkdownContainer"] p, [data-testid="stMarkdownContainer"] li {{
+  font-size: 16px; line-height: 1.6; color: {T["ink"]};
+}}
+h1, h2, h3 {{ font-family: 'Host Grotesk', system-ui, sans-serif; font-weight: 500 !important;
+  letter-spacing: -0.02em; text-wrap: balance; color: {T["ink"]}; }}
+.block-container {{ padding-top: 2.4rem; max-width: 1200px; }}
 [data-testid="stIconMaterial"] {{ font-family: 'Material Symbols Rounded' !important; }}
-code, .mono {{ font-family: 'IBM Plex Mono', ui-monospace, monospace; }}
-.eyebrow {{ font-size: .72rem; letter-spacing: .08em; text-transform: uppercase; color: {T["muted"]};
-  font-weight: 500; margin: 0 0 .35rem; }}
-.hero h1 {{ font-size: 1.85rem; margin: 0 0 .4rem; color: {T["ink"]}; }}
-.hero p {{ color: {T["muted"]}; max-width: 68ch; margin: 0; font-size: 1rem; line-height: 1.55; }}
-.expect {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 12px;
-  margin: 1.1rem 0 .4rem; }}
-.expect div {{ border-top: 2px solid {T["accent"]}; padding: .6rem .1rem 0; }}
-.expect b {{ display: block; color: {T["ink"]}; font-weight: 600; margin-bottom: .2rem; }}
-.expect span {{ color: {T["muted"]}; font-size: .9rem; line-height: 1.45; }}
-.group-label {{ font-weight: 600; color: {T["ink"]}; margin: .9rem 0 .1rem; }}
-.group-hint {{ color: {T["muted"]}; font-size: .86rem; margin-bottom: .45rem; }}
-.chips {{ display: flex; flex-wrap: wrap; gap: 6px; margin: .35rem 0 .2rem; }}
-.chip {{ display: inline-flex; align-items: center; gap: 6px; border-radius: 999px; padding: 3px 10px;
-  font-size: .8rem; font-weight: 500; border: 1px solid {T["line"]}; color: {T["muted"]};
-  background: {T["surface"]}; }}
+code, .mono {{ font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace; }}
+a {{ color: {T["ink"]}; text-decoration-color: {T["accent"]}; text-underline-offset: 3px; }}
+.eyebrow {{ font-size: .8rem; letter-spacing: .07em; text-transform: uppercase; color: {T["muted"]};
+  font-weight: 600; margin: 0 0 .4rem; }}
+.hero h1 {{ font-size: 2.1rem; line-height: 1.15; letter-spacing: -0.035em; margin: 0 0 .6rem; }}
+.hero p {{ color: {T["muted"]}; max-width: 64ch; margin: 0; font-size: 1.08rem; line-height: 1.6; }}
+.expect {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 20px;
+  margin: 1.4rem 0 .8rem; }}
+.expect div {{ border-top: 3px solid {T["accent"]}; padding-top: .7rem; }}
+.expect b {{ display: block; color: {T["ink"]}; font-weight: 600; font-size: 1.02rem; margin-bottom: .25rem; }}
+.expect span {{ color: {T["muted"]}; font-size: .98rem; line-height: 1.55; }}
+.group-label {{ font-weight: 600; font-size: 1.05rem; color: {T["ink"]}; margin: 1rem 0 .15rem; }}
+.group-hint {{ color: {T["muted"]}; font-size: .95rem; line-height: 1.5; margin-bottom: .6rem; }}
+.chips {{ display: flex; flex-wrap: wrap; gap: 8px; margin: .4rem 0 .3rem; }}
+.chip {{ display: inline-flex; align-items: center; border-radius: 999px; padding: 4px 12px;
+  font-size: .88rem; font-weight: 500; border: 1px solid {T["line"]}; color: {T["ink"]};
+  background: {T["card"]}; }}
 .chip.ok {{ color: {T["ok"]}; background: {T["ok_soft"]}; border-color: transparent; }}
 .chip.warn {{ color: {T["warn"]}; background: {T["warn_soft"]}; border-color: transparent; }}
-.chip.accent {{ color: {T["accent"]}; background: {T["accent_soft"]}; border-color: transparent; }}
-.question {{ font-size: 1.15rem; font-weight: 600; color: {T["ink"]}; margin: 1.2rem 0 .3rem; }}
-.src {{ border: 1px solid {T["line"]}; background: {T["surface"]}; border-radius: 8px;
-  padding: 10px 12px; margin-bottom: 8px; }}
-.src .top {{ display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 4px; }}
-.src .ref {{ font-family: 'IBM Plex Mono', monospace; font-size: .78rem; font-weight: 500;
-  color: {T["accent"]}; }}
-.src .kind {{ font-size: .7rem; letter-spacing: .06em; text-transform: uppercase; color: {T["muted"]}; }}
-.src a {{ color: {T["ink"]}; font-weight: 500; text-decoration: none; line-height: 1.35; }}
-.src a:hover {{ color: {T["accent"]}; text-decoration: underline; }}
-.src .meta {{ font-family: 'IBM Plex Mono', monospace; font-size: .74rem; color: {T["muted"]};
-  margin-top: 4px; }}
-.src .snip {{ font-size: .84rem; color: {T["muted"]}; margin-top: 6px; line-height: 1.45;
+.chip.accent {{ color: {T["ink"]}; background: {T["info_soft"]}; border-color: transparent; }}
+.question {{ font-size: 1.3rem; font-weight: 600; letter-spacing: -0.01em; color: {T["ink"]};
+  margin: 1.4rem 0 .4rem; }}
+.src {{ border: 1px solid {T["line"]}; background: {T["card"]}; border-radius: 10px;
+  padding: 12px 14px; margin-bottom: 10px; transition: transform .15s ease, border-color .15s ease; }}
+.src:hover {{ transform: translateY(-2px); border-color: {T["accent"]}; }}
+.src .top {{ display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 6px; }}
+.src .ref {{ font-family: 'JetBrains Mono', monospace; font-size: .82rem; font-weight: 500;
+  color: {T["ink"]}; background: {T["accent"]}; border-radius: 4px; padding: 1px 6px; }}
+.src .kind {{ font-size: .8rem; letter-spacing: .05em; text-transform: uppercase; color: {T["muted"]};
+  font-weight: 600; }}
+.src a {{ color: {T["ink"]}; font-weight: 600; font-size: 1rem; text-decoration: none; line-height: 1.4; }}
+.src a:hover {{ text-decoration: underline; text-decoration-color: {T["accent"]}; }}
+.src .meta {{ font-family: 'JetBrains Mono', monospace; font-size: .82rem; color: {T["muted"]};
+  margin-top: 6px; }}
+.src .snip {{ font-size: .94rem; color: {T["muted"]}; margin-top: 8px; line-height: 1.55;
   display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }}
-.steps {{ font-size: .85rem; color: {T["muted"]}; line-height: 1.7; }}
-.steps b {{ color: {T["ink"]}; font-weight: 500; }}
-.takeaways {{ border-left: 2px solid {T["accent"]}; padding: .2rem 0 .2rem 1rem; margin: .4rem 0 1rem; }}
-.takeaways li {{ color: {T["ink"]}; margin-bottom: .25rem; }}
-[data-testid="stMetricValue"] {{ font-variant-numeric: tabular-nums; font-weight: 600; }}
-[data-testid="stSidebar"] .stMarkdown p {{ font-size: .9rem; }}
+.steps {{ font-size: .92rem; color: {T["muted"]}; line-height: 1.7; margin-top: .4rem; }}
+.steps b {{ color: {T["ink"]}; font-weight: 600; }}
+.takeaways {{ border-left: 3px solid {T["accent"]}; padding: .3rem 0 .3rem 1.1rem; margin: .6rem 0 1.1rem; }}
+.takeaways li {{ color: {T["ink"]}; font-size: 1.02rem; margin-bottom: .35rem; }}
+.side-stats {{ font-size: .95rem; color: {T["muted"]}; line-height: 1.8; }}
+.side-stats b {{ color: {T["ink"]}; font-weight: 600; font-variant-numeric: tabular-nums; }}
+[data-testid="stMetricValue"], [data-testid="stMetricValue"] div, [data-testid="stMetricValue"] p {{
+  font-size: 2.3rem !important; line-height: 1.15 !important; font-variant-numeric: tabular-nums;
+  font-weight: 500; letter-spacing: -0.03em; color: {T["ink"]}; }}
+[data-testid="stMetricLabel"] p {{ font-size: .95rem; color: {T["muted"]}; }}
+[data-testid="stCaptionContainer"], [data-testid="stCaption"] {{ opacity: 1 !important; }}
+[data-testid="stCaptionContainer"] p {{ font-size: .95rem; color: {T["muted"]}; }}
+.stButton button {{ border-radius: 10px; min-height: 44px; text-align: left; justify-content: flex-start;
+  border-color: {T["line"]}; color: {T["ink"]}; transition: transform .12s ease, border-color .12s ease; }}
+.stButton button:hover {{ border-color: {T["accent"]}; color: {T["ink"]}; transform: translateY(-1px); }}
+.stButton button:active {{ transform: translateY(1px); }}
+.stButton button p {{ font-size: .96rem; white-space: normal; }}
 @media (prefers-reduced-motion: reduce) {{ * {{ transition: none !important; animation: none !important; }} }}
 </style>
 """,
@@ -102,7 +123,9 @@ PALETTE = (
     else ["#2a78d6", "#eb6834", "#1baf7a", "#eda100", "#e87ba4"]
 )
 MECH_SCALE = alt.Scale(domain=MECHANISMS, range=PALETTE)
-SEQ = ["#1b3236", "#2f7f88", "#7fd0d8"] if DARK else ["#e2f0f1", "#5aa6ae", "#0b4f56"]
+SEQ = (
+    ["#1a2233", "#5d6b94", "#c9d1ea"] if DARK else ["#eef0f6", "#7b86a8", "#1f2b4d"]
+)  # un solo tono (marino)
 SOURCE_KIND = {
     "trial": "Ensayo clínico",
     "publication": "Artículo",
@@ -118,7 +141,7 @@ ROUTE = {
 
 def num(n: int) -> str:
     """3782 -> '3 782' (separador de miles con espacio, como en el resto del proyecto)."""
-    return f"{n:,}".replace(",", " ")
+    return f"{n:,}".replace(",", "\u202f")  # espacio fino que no se parte en dos líneas
 
 
 def esc(x) -> str:
@@ -135,18 +158,18 @@ def styled(chart: alt.Chart, height: int = 320) -> alt.Chart:
             tickColor=T["line"],
             labelColor=T["muted"],
             titleColor=T["muted"],
-            labelFont="IBM Plex Sans",
-            titleFont="IBM Plex Sans",
-            labelFontSize=12,
+            labelFont="Host Grotesk",
+            titleFont="Host Grotesk",
+            labelFontSize=13,
             titleFontWeight=500,
         )
         .configure_legend(
             labelColor=T["muted"],
             titleColor=T["muted"],
             orient="top",
-            labelFont="IBM Plex Sans",
+            labelFont="Host Grotesk",
         )
-        .configure_text(font="IBM Plex Sans")
+        .configure_text(font="Host Grotesk")
     )
 
 
@@ -212,7 +235,7 @@ with st.sidebar:
     st.markdown("### OncoResearchAI")
     st.caption("Inteligencia competitiva en melanoma a partir de datos públicos.")
     st.markdown(
-        f"""<div class="steps">
+        f"""<div class="side-stats">
 <b>{num(pg["trials"])}</b> ensayos clínicos (ClinicalTrials.gov)<br>
 <b>{num(pg["publications"])}</b> artículos científicos (Europe PMC)<br>
 <b>{pg["labels"]}</b> fichas técnicas (FDA)</div>""",
