@@ -20,6 +20,18 @@ def refs_in(text: str) -> list[str]:
     return [r for group in BRACKET.findall(text) for r in REF.findall(group)]
 
 
+def malformed_refs(text: str) -> list[str]:
+    """Citas con forma de cita pero mal escritas: [V5], [A3], [S]... (el modelo se equivocó de letra)."""
+    out = []
+    for group in BRACKET.findall(text):
+        for token in re.split(r"[,;/\s]+", group.strip()):
+            if re.fullmatch(r"[A-Za-z]{1,3}\d{1,3}", token) and not re.fullmatch(
+                r"S\d+", token
+            ):
+                out.append(token)
+    return out
+
+
 def strip_citations(text: str) -> str:
     return BRACKET.sub(lambda m: " " if REF.search(m.group(1)) else m.group(0), text)
 
@@ -94,7 +106,8 @@ def check_citations(
 ) -> dict:
     valid = {s.ref for s in sources} | ({"SQL"} if has_sql else set())
     cited = refs_in(answer)
-    invalid = sorted({c for c in cited if c not in valid})
+    # Inválidas: citas a fuentes que no existen ([S9] con 6 fuentes) o mal escritas ([V5]).
+    invalid = sorted({c for c in cited if c not in valid} | set(malformed_refs(answer)))
     sentences = [
         s.strip()
         for s in re.split(r"(?<=[.!?])\s+|\n+", answer)

@@ -432,7 +432,7 @@ respaldadas, o qué conviene revisar.</span></div>
         badges = [("accent", ROUTE[res["route"]])]
         if c.get("invalid"):
             badges.append(
-                ("warn", "Cita a una fuente inexistente: " + ", ".join(c["invalid"]))
+                ("warn", "Cita mal escrita o inexistente: " + ", ".join(c["invalid"]))
             )
         if c.get("unsupported_numbers"):
             badges.append(

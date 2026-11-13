@@ -72,3 +72,17 @@ def test_citations_in_grouped_or_odd_brackets_are_recognized():
     ]
     assert refs_in("mutación BRAF [V/S1][SQL]") == ["S1", "SQL"]
     assert refs_in("a list [see table] here") == []
+
+
+def test_malformed_citation_like_V5_is_flagged_as_invalid():
+    ans = "Los inhibidores de BRAF mejoran la respuesta tumoral en pacientes con mutaciones BRAF [V5]."
+    c = check_citations(ans, [_src("S5")], has_sql=False)
+    assert c["invalid"] == ["V5"]
+    assert c["cited"] == []
+    # y una referencia que NO parece cita no se marca
+    assert (
+        check_citations("Ver la tabla [see table 2] aquí.", [_src("S1")], False)[
+            "invalid"
+        ]
+        == []
+    )
