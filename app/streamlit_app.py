@@ -25,19 +25,26 @@ st.set_page_config(
 # st.context.theme.type, porque refleja el modo del sistema del usuario (oscuro) aunque el fondo
 # siga claro, y eso pintaba texto blanco sobre blanco. Fondo y texto salen del mismo sitio.
 DARK = False
-T = {  # tokens (los oscuros son la variante "inv" de la misma paleta)
-    "bg": "#05070a" if DARK else "#ffffff",
-    "surface": "#111417" if DARK else "#f4f4f2",
-    "card": "#0b0e11" if DARK else "#ffffff",
-    "ink": "#ffffff" if DARK else "#1f2b4d",
-    "muted": "#a3a7ab" if DARK else "#646b81",
-    "line": "#23272b" if DARK else "#e2e2dd",
-    "accent": "#f7941d",  # naranja: bordes, marcas, rellenos; nunca texto
-    "info_soft": "#1a2233" if DARK else "#eceff6",
-    "ok": "#5fd39a" if DARK else "#1d6b45",
-    "ok_soft": "#10291d" if DARK else "#e4f2ea",
-    "warn": "#f5b86a" if DARK else "#8a4b00",
-    "warn_soft": "#2e2110" if DARK else "#fdf0dd",
+T = {  # tokens
+    "bg": "#f5f7fc",
+    "surface": "#ffffff",
+    "card": "#ffffff",
+    "ink": "#1b2a4e",  # azul marino: títulos y texto principal
+    "muted": "#4d5b78",  # gris azulado: texto secundario (6,4:1 sobre la página)
+    "line": "#dfe5f2",
+    "accent": "#f7941d",  # naranja: solo bordes y marcas, nunca texto
+    "blue": "#2457d6",  # enlaces, pestaña activa, etiquetas pequeñas
+    "blue_soft": "#e8effe",
+    "green_soft": "#e2f5ed",
+    "orange_soft": "#fff0e1",
+    "ok": "#0e6b49",
+    "ok_soft": "#e2f5ed",
+    "warn": "#8a4b00",
+    "warn_soft": "#fff0d6",
+    "info_soft": "#e8effe",
+    "side_bg": "#1b2a4e",  # barra lateral oscura
+    "side_ink": "#eef1fb",
+    "side_muted": "#b4bedb",
 }
 st.markdown(
     f"""
@@ -49,61 +56,114 @@ html, body, .stApp, p, li, label, input, textarea, [data-testid="stMarkdownConta
 .stApp, [data-testid="stMarkdownContainer"] p, [data-testid="stMarkdownContainer"] li {{
   font-size: 16px; line-height: 1.6; color: {T["ink"]};
 }}
-h1, h2, h3 {{ font-family: 'Host Grotesk', system-ui, sans-serif; font-weight: 500 !important;
+h1, h2, h3 {{ font-family: 'Host Grotesk', system-ui, sans-serif; font-weight: 600 !important;
   letter-spacing: -0.02em; text-wrap: balance; color: {T["ink"]}; }}
 .block-container {{ padding-top: 2.4rem; max-width: 1200px; }}
 [data-testid="stIconMaterial"] {{ font-family: 'Material Symbols Rounded' !important; }}
 code, .mono {{ font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace; }}
-a {{ color: {T["ink"]}; text-decoration-color: {T["accent"]}; text-underline-offset: 3px; }}
-.eyebrow {{ font-size: .8rem; letter-spacing: .07em; text-transform: uppercase; color: {T["muted"]};
-  font-weight: 600; margin: 0 0 .4rem; }}
+a {{ color: {T["blue"]}; text-decoration-color: {T["blue"]}; text-underline-offset: 3px; }}
+
+/* ---- barra lateral oscura ---- */
+[data-testid="stSidebar"] {{ background: {T["side_bg"]}; }}
+[data-testid="stSidebar"] p, [data-testid="stSidebar"] span, [data-testid="stSidebar"] li,
+[data-testid="stSidebar"] h3, [data-testid="stSidebar"] label {{ color: {T["side_ink"]}; }}
+[data-testid="stSidebar"] [data-testid="stCaptionContainer"] p {{ color: {T["side_muted"]}; }}
+.side-stats {{ font-size: .95rem; color: {T["side_muted"]}; line-height: 1.8; }}
+.side-stats b {{ color: #ffffff; font-weight: 600; font-variant-numeric: tabular-nums; }}
+.side-title {{ font-size: 1.25rem; font-weight: 600; color: #ffffff; letter-spacing: -0.02em;
+  margin-bottom: .2rem; }}
+.side-title i {{ display: inline-block; width: 10px; height: 10px; border-radius: 3px;
+  background: {T["accent"]}; margin-right: 8px; }}
+.side-eyebrow {{ font-size: .78rem; letter-spacing: .07em; text-transform: uppercase; font-weight: 600;
+  color: {T["side_muted"]}; margin: .9rem 0 .2rem; }}
+
+/* ---- textos de sección ---- */
+.eyebrow {{ font-size: .8rem; letter-spacing: .07em; text-transform: uppercase; color: {T["blue"]};
+  font-weight: 700; margin: 0 0 .4rem; }}
 .hero h1 {{ font-size: 2.1rem; line-height: 1.15; letter-spacing: -0.035em; margin: 0 0 .6rem; }}
 .hero p {{ color: {T["muted"]}; max-width: 64ch; margin: 0; font-size: 1.08rem; line-height: 1.6; }}
-.expect {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 20px;
-  margin: 1.4rem 0 .8rem; }}
-.expect div {{ border-top: 3px solid {T["accent"]}; padding-top: .7rem; }}
+
+/* ---- tres tarjetas de ayuda, cada una de su color ---- */
+.expect {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px;
+  margin: 1.4rem 0 1rem; }}
+.expect div {{ border-radius: 12px; padding: 14px 16px 14px; border-top: 4px solid {T["blue"]};
+  background: {T["blue_soft"]}; }}
+.expect div:nth-child(2) {{ border-top-color: #1baf7a; background: {T["green_soft"]}; }}
+.expect div:nth-child(3) {{ border-top-color: {T["accent"]}; background: {T["orange_soft"]}; }}
 .expect b {{ display: block; color: {T["ink"]}; font-weight: 600; font-size: 1.02rem; margin-bottom: .25rem; }}
-.expect span {{ color: {T["muted"]}; font-size: .98rem; line-height: 1.55; }}
-.group-label {{ font-weight: 600; font-size: 1.05rem; color: {T["ink"]}; margin: 1rem 0 .15rem; }}
+.expect span {{ color: {T["ink"]}; opacity: .82; font-size: .98rem; line-height: 1.55; }}
+
+/* ---- ejemplos de preguntas, un color por grupo ---- */
+.group-label {{ font-weight: 600; font-size: 1.05rem; color: {T["ink"]}; margin: 1rem 0 .15rem;
+  display: flex; align-items: center; gap: 8px; }}
+.group-label::before {{ content: ""; width: 10px; height: 10px; border-radius: 50%; background: {T["blue"]}; }}
+.g2 .group-label::before {{ background: #1baf7a; }}
+.g3 .group-label::before {{ background: {T["accent"]}; }}
 .group-hint {{ color: {T["muted"]}; font-size: .95rem; line-height: 1.5; margin-bottom: .6rem; }}
+[data-testid="stColumn"]:nth-child(1) .stButton button {{ border-left: 5px solid {T["blue"]}; }}
+[data-testid="stColumn"]:nth-child(2) .stButton button {{ border-left: 5px solid #1baf7a; }}
+[data-testid="stColumn"]:nth-child(3) .stButton button {{ border-left: 5px solid {T["accent"]}; }}
+
+/* ---- etiquetas ---- */
 .chips {{ display: flex; flex-wrap: wrap; gap: 8px; margin: .4rem 0 .3rem; }}
 .chip {{ display: inline-flex; align-items: center; border-radius: 999px; padding: 4px 12px;
-  font-size: .88rem; font-weight: 500; border: 1px solid {T["line"]}; color: {T["ink"]};
+  font-size: .88rem; font-weight: 600; border: 1px solid {T["line"]}; color: {T["ink"]};
   background: {T["card"]}; }}
 .chip.ok {{ color: {T["ok"]}; background: {T["ok_soft"]}; border-color: transparent; }}
 .chip.warn {{ color: {T["warn"]}; background: {T["warn_soft"]}; border-color: transparent; }}
-.chip.accent {{ color: {T["ink"]}; background: {T["info_soft"]}; border-color: transparent; }}
+.chip.accent {{ color: #1d4fb8; background: {T["info_soft"]}; border-color: transparent; }}
+.chip.braf {{ color: #1d4fb8; background: #e8effe; border-color: transparent; }}
+.chip.mek {{ color: #9a4300; background: #fff0e1; border-color: transparent; }}
+.chip.pd1 {{ color: #0e6b49; background: #e2f5ed; border-color: transparent; }}
+.chip.ctla4 {{ color: #7a5400; background: #fff6d6; border-color: transparent; }}
+.chip.lag3 {{ color: #a3285c; background: #fde8f0; border-color: transparent; }}
+
+/* ---- respuesta y fuentes ---- */
 .question {{ font-size: 1.3rem; font-weight: 600; letter-spacing: -0.01em; color: {T["ink"]};
   margin: 1.4rem 0 .4rem; }}
-.src {{ border: 1px solid {T["line"]}; background: {T["card"]}; border-radius: 10px;
-  padding: 12px 14px; margin-bottom: 10px; transition: transform .15s ease, border-color .15s ease; }}
-.src:hover {{ transform: translateY(-2px); border-color: {T["accent"]}; }}
+.src {{ border: 1px solid {T["line"]}; border-left: 5px solid {T["blue"]}; background: {T["card"]};
+  border-radius: 10px; padding: 12px 14px; margin-bottom: 10px;
+  transition: transform .15s ease, box-shadow .15s ease; }}
+.src.s-publication {{ border-left-color: #1baf7a; }}
+.src.s-label {{ border-left-color: {T["accent"]}; }}
+.src.s-congress {{ border-left-color: #e87ba4; }}
+.src:hover {{ transform: translateY(-2px); box-shadow: 0 4px 14px rgba(27,42,78,.10); }}
 .src .top {{ display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 6px; }}
 .src .ref {{ font-family: 'JetBrains Mono', monospace; font-size: .82rem; font-weight: 500;
-  color: {T["ink"]}; background: {T["accent"]}; border-radius: 4px; padding: 1px 6px; }}
+  color: #ffffff; background: {T["blue"]}; border-radius: 4px; padding: 1px 7px; }}
+.src.s-publication .ref {{ background: #0e6b49; }}
+.src.s-label .ref {{ background: #b35a00; }}
+.src.s-congress .ref {{ background: #a3285c; }}
 .src .kind {{ font-size: .8rem; letter-spacing: .05em; text-transform: uppercase; color: {T["muted"]};
-  font-weight: 600; }}
+  font-weight: 700; }}
 .src a {{ color: {T["ink"]}; font-weight: 600; font-size: 1rem; text-decoration: none; line-height: 1.4; }}
-.src a:hover {{ text-decoration: underline; text-decoration-color: {T["accent"]}; }}
+.src a:hover {{ color: {T["blue"]}; text-decoration: underline; }}
 .src .meta {{ font-family: 'JetBrains Mono', monospace; font-size: .82rem; color: {T["muted"]};
   margin-top: 6px; }}
 .src .snip {{ font-size: .94rem; color: {T["muted"]}; margin-top: 8px; line-height: 1.55;
   display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }}
 .steps {{ font-size: .92rem; color: {T["muted"]}; line-height: 1.7; margin-top: .4rem; }}
-.steps b {{ color: {T["ink"]}; font-weight: 600; }}
-.takeaways {{ border-left: 3px solid {T["accent"]}; padding: .3rem 0 .3rem 1.1rem; margin: .6rem 0 1.1rem; }}
+.steps b {{ color: {T["blue"]}; font-weight: 600; }}
+.takeaways {{ border-left: 4px solid {T["blue"]}; background: {T["blue_soft"]}; border-radius: 0 10px 10px 0;
+  padding: .7rem 1rem .7rem 1.6rem; margin: .6rem 0 1.1rem; }}
 .takeaways li {{ color: {T["ink"]}; font-size: 1.02rem; margin-bottom: .35rem; }}
-.side-stats {{ font-size: .95rem; color: {T["muted"]}; line-height: 1.8; }}
-.side-stats b {{ color: {T["ink"]}; font-weight: 600; font-variant-numeric: tabular-nums; }}
+
+/* ---- cifras, un color por columna ---- */
+[data-testid="stMetric"] {{ background: {T["card"]}; border: 1px solid {T["line"]}; border-top: 4px solid {T["blue"]};
+  border-radius: 12px; padding: 12px 16px; }}
+[data-testid="stColumn"]:nth-child(2) [data-testid="stMetric"] {{ border-top-color: #1baf7a; }}
+[data-testid="stColumn"]:nth-child(3) [data-testid="stMetric"] {{ border-top-color: {T["accent"]}; }}
+[data-testid="stColumn"]:nth-child(4) [data-testid="stMetric"] {{ border-top-color: #e87ba4; }}
 [data-testid="stMetricValue"], [data-testid="stMetricValue"] div, [data-testid="stMetricValue"] p {{
   font-size: 2.3rem !important; line-height: 1.15 !important; font-variant-numeric: tabular-nums;
-  font-weight: 500; letter-spacing: -0.03em; color: {T["ink"]}; }}
+  font-weight: 600; letter-spacing: -0.03em; color: {T["ink"]}; }}
 [data-testid="stMetricLabel"] p {{ font-size: .95rem; color: {T["muted"]}; }}
 [data-testid="stCaptionContainer"], [data-testid="stCaption"] {{ opacity: 1 !important; }}
 [data-testid="stCaptionContainer"] p {{ font-size: .95rem; color: {T["muted"]}; }}
 .stButton button {{ border-radius: 10px; min-height: 44px; text-align: left; justify-content: flex-start;
-  border-color: {T["line"]}; color: {T["ink"]}; transition: transform .12s ease, border-color .12s ease; }}
-.stButton button:hover {{ border-color: {T["accent"]}; color: {T["ink"]}; transform: translateY(-1px); }}
+  background: {T["card"]}; border-color: {T["line"]}; color: {T["ink"]};
+  transition: transform .12s ease, box-shadow .12s ease; }}
+.stButton button:hover {{ color: {T["ink"]}; transform: translateY(-1px); box-shadow: 0 3px 10px rgba(27,42,78,.12); }}
 .stButton button:active {{ transform: translateY(1px); }}
 .stButton button p {{ font-size: .96rem; white-space: normal; }}
 @media (prefers-reduced-motion: reduce) {{ * {{ transition: none !important; animation: none !important; }} }}
@@ -134,6 +194,13 @@ SOURCE_KIND = {
     "publication": "Artículo",
     "label": "Ficha técnica FDA",
     "congress": "Congreso (PDF)",
+}
+MECH_CLASS = {
+    "BRAF inhibitor": "braf",
+    "MEK inhibitor": "mek",
+    "anti-PD-1": "pd1",
+    "anti-CTLA-4": "ctla4",
+    "anti-LAG-3": "lag3",
 }
 ROUTE = {
     "sql": "Consultó la base de datos (recuento exacto)",
@@ -169,7 +236,9 @@ def styled(chart: alt.Chart, height: int = 320) -> alt.Chart:
         .configure_legend(
             labelColor=T["muted"],
             titleColor=T["muted"],
-            orient="top",
+            orient="bottom",
+            columns=3,  # dos filas: con una sola se cortaba «anti-CTLA-4» y faltaba «anti-LAG-3»
+            labelLimit=0,
             labelFont="Host Grotesk",
         )
         .configure_text(font="Host Grotesk")
@@ -206,7 +275,7 @@ def source_html(s: dict, score: float | None = None) -> str:
     )
     ref = f'<span class="ref">[{esc(s["ref"])}]</span>' if s.get("ref") else ""
     return (
-        f'<div class="src"><div class="top">{ref}'
+        f'<div class="src s-{esc(s["source"])}"><div class="top">{ref}'
         f'<span class="kind">{esc(SOURCE_KIND.get(s["source"], s["source"]))}</span></div>'
         f'<a href="{esc(s["url"])}" target="_blank" rel="noopener">{esc(s["title"])}</a>'
         f'<div class="meta">{esc(meta)}</div><div class="snip">{esc(s["text"][:500])}</div></div>'
@@ -235,7 +304,9 @@ DRUGS = get("/drugs")
 
 # ---------------------------------------------------------------- barra lateral
 with st.sidebar:
-    st.markdown("### OncoResearchAI")
+    st.markdown(
+        '<div class="side-title"><i></i>OncoResearchAI</div>', unsafe_allow_html=True
+    )
     st.caption("Inteligencia competitiva en melanoma a partir de datos públicos.")
     st.markdown(
         f"""<div class="side-stats">
@@ -244,15 +315,17 @@ with st.sidebar:
 <b>{pg["labels"]}</b> fichas técnicas (FDA)</div>""",
         unsafe_allow_html=True,
     )
-    st.markdown("**Fármacos seguidos**")
+    st.markdown(
+        '<div class="side-eyebrow">Fármacos seguidos</div>', unsafe_allow_html=True
+    )
     by_mech: dict[str, list[str]] = {}
     for d in DRUGS:
         by_mech.setdefault(d["mechanism"], []).append(d["name"])
     for mech in MECHANISMS:
         if mech in by_mech:
             st.markdown(
-                f'<div class="eyebrow">{esc(mech)}</div>'
-                + chips([("", n) for n in by_mech[mech]]),
+                f'<div class="side-eyebrow" style="margin-top:.6rem">{esc(mech)}</div>'
+                + chips([(MECH_CLASS[mech], n) for n in by_mech[mech]]),
                 unsafe_allow_html=True,
             )
     st.caption(
@@ -317,7 +390,8 @@ respaldadas, o qué conviene revisar.</span></div>
         for col, (group, (hint, qs)) in zip(cols, EXAMPLES.items(), strict=True):
             with col:
                 st.markdown(
-                    f'<div class="group-label">{esc(group)}</div><div class="group-hint">{esc(hint)}</div>',
+                    f'<div class="g{list(EXAMPLES).index(group) + 1}"><div class="group-label">'
+                    f'{esc(group)}</div><div class="group-hint">{esc(hint)}</div></div>',
                     unsafe_allow_html=True,
                 )
                 for q in qs:
