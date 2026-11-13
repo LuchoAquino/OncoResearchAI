@@ -59,3 +59,16 @@ def test_unsupported_numbers_accepts_spanish_decimal_comma():
         )
         == []
     )
+
+
+def test_citations_in_grouped_or_odd_brackets_are_recognized():
+    from onco_research_ai.agent.citations import refs_in
+
+    assert refs_in("PFS improved [S1, S3] and counts [SQL; S2].") == [
+        "S1",
+        "S3",
+        "SQL",
+        "S2",
+    ]
+    assert refs_in("mutación BRAF [V/S1][SQL]") == ["S1", "SQL"]
+    assert refs_in("a list [see table] here") == []

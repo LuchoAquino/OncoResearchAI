@@ -473,18 +473,26 @@ real por stdio.
 
 ## Fase 9 — Interfaz (Streamlit)
 
-Cuatro pestañas, que consumen la API (la interfaz no toca la base de datos):
+La interfaz consume la API (no toca la base de datos) y está pensada para alguien que la abre
+por primera vez: cada pestaña explica qué hace y qué esperar.
 
-- **Asistente:** chat con la respuesta, un indicador de verificación (✅ citas verificadas o
-  ⚠️ qué revisar), el SQL usado y tarjetas con las fuentes citadas y su enlace.
-- **Panorama competitivo:** ensayos activos por fármaco, mapa fármaco × fase, ensayos iniciados
-  por año y mecanismo, y principales patrocinadores (Pierre Fabre aparece con 6 ensayos). La
-  paleta de colores se validó para daltonismo; cada gráfico tiene etiquetas y una vista en tabla.
+- **Preguntar:** antes de la primera pregunta muestra cuánto tarda (3-20 s), cómo leer las
+  citas ([S1] documento, [SQL] recuento exacto) y ejemplos agrupados por tipo de pregunta. Cada
+  respuesta muestra qué hizo el agente (base de datos, búsqueda o ambas), una etiqueta de
+  verificación (citas y cifras respaldadas, o qué revisar), el tiempo de cada paso, el SQL usado
+  y las fuentes citadas al lado, con su enlace.
+- **Panorama competitivo:** cifras clave, una lectura rápida en frases, ensayos activos por
+  fármaco, mapa fármaco × fase, ensayos por año y mecanismo, y laboratorios (Pierre Fabre
+  resaltado). Paleta validada para daltonismo, etiquetas visibles y vista en tabla.
 - **Perfil de fármaco:** fases, estados, patrocinadores, artículos más citados y fichas FDA.
-- **Búsqueda:** búsqueda híbrida con filtros.
+- **Buscar documentos:** búsqueda híbrida con filtros, sin redactar respuesta.
 
-Un error encontrado al revisar la interfaz: la cifra principal sumaba ensayos por fármaco
-(1 422) en lugar de contar ensayos distintos (972). Ahora los totales se calculan en SQL.
+Identidad visual: tono clínico (verde azulado y grises de ese matiz), tipografía IBM Plex y los
+códigos de registro (NCT, PMID) en monoespaciada (`.streamlit/config.toml` y el CSS de la app).
+
+Errores encontrados al revisar la interfaz con capturas: la cifra principal sumaba ensayos por
+fármaco (1 422) en lugar de contar ensayos distintos (972), y una cita escrita como `[S1, S2]`
+no se reconocía; ambos corregidos.
 
 ## Fase 10 — Evaluación de las respuestas y PDFs de congresos
 

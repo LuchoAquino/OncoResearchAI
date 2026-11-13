@@ -11,7 +11,19 @@ from dataclasses import asdict, dataclass
 from onco_research_ai.processing.extractor import numbers_in
 from onco_research_ai.retrieval.hybrid import Hit
 
-CITE = re.compile(r"\[(S\d+|SQL)\]")
+# Una cita es cualquier S1 o SQL dentro de corchetes: [S1], [S1, S3], [SQL; S2]...
+BRACKET = re.compile(r"\[([^\[\]]{1,40})\]")
+REF = re.compile(r"\b(S\d+|SQL)\b")
+
+
+def refs_in(text: str) -> list[str]:
+    return [r for group in BRACKET.findall(text) for r in REF.findall(group)]
+
+
+def strip_citations(text: str) -> str:
+    return BRACKET.sub(lambda m: " " if REF.search(m.group(1)) else m.group(0), text)
+
+
 SOURCE_LABEL = {
     "trial": "Ensayo clínico (ClinicalTrials.gov)",
     "publication": "Artículo (Europe PMC)",
@@ -70,7 +82,7 @@ def unsupported_numbers(answer: str, context: str) -> list[str]:
     """
     in_context = numbers_in(context)
     bad = set()
-    for tok in re.findall(r"\d+(?:[.,]\d+)*", CITE.sub(" ", answer)):
+    for tok in re.findall(r"\d+(?:[.,]\d+)*", strip_citations(answer)):
         readings = {tok.replace(",", "").rstrip("."), tok.replace(",", ".")}
         if not readings & in_context and not (tok.isdigit() and len(tok) == 1):
             bad.add(tok)
@@ -81,7 +93,7 @@ def check_citations(
     answer: str, sources: list[Source], has_sql: bool, context: str = ""
 ) -> dict:
     valid = {s.ref for s in sources} | ({"SQL"} if has_sql else set())
-    cited = CITE.findall(answer)
+    cited = refs_in(answer)
     invalid = sorted({c for c in cited if c not in valid})
     sentences = [
         s.strip()
@@ -90,7 +102,7 @@ def check_citations(
         and not s.strip().startswith("#")
         and not s.strip().endswith(":")
     ]
-    uncited = [s for s in sentences if not CITE.search(s)]
+    uncited = [s for s in sentences if not refs_in(s)]
     return {
         "cited": sorted(set(cited) & valid, key=lambda r: (r == "SQL", r)),
         "invalid": invalid,

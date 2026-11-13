@@ -1,0 +1,14 @@
+# Identidad visual: tono clínico (verde azulado profundo), neutros con ese mismo matiz.
+[theme]
+base = "light"
+primaryColor = "#0e6b74"
+backgroundColor = "#f5f7f7"
+secondaryBackgroundColor = "#e9eff0"
+textColor = "#17252a"
+font = "sans-serif"
+
+[client]
+toolbarMode = "minimal"
+
+[browser]
+gatherUsageStats = false
