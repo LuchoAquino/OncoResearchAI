@@ -473,19 +473,19 @@ real por stdio.
 
 ## Fase 9 — Interfaz (Streamlit)
 
-La interfaz consume la API (no toca la base de datos) y está pensada para alguien que la abre
+La interfaz, **íntegramente en inglés** (textos, gráficos, estados y fases; el asistente responde en el idioma de la pregunta), consume la API (no toca la base de datos) y está pensada para alguien que la abre
 por primera vez: cada pestaña explica qué hace y qué esperar.
 
-- **Preguntar:** antes de la primera pregunta muestra cuánto tarda (3-20 s), cómo leer las
+- **Ask:** antes de la primera pregunta muestra cuánto tarda (3-20 s), cómo leer las
   citas ([S1] documento, [SQL] recuento exacto) y ejemplos agrupados por tipo de pregunta. Cada
   respuesta muestra qué hizo el agente (base de datos, búsqueda o ambas), una etiqueta de
   verificación (citas y cifras respaldadas, o qué revisar), el tiempo de cada paso, el SQL usado
   y las fuentes citadas al lado, con su enlace.
-- **Panorama competitivo:** cifras clave, una lectura rápida en frases, ensayos activos por
+- **Competitive landscape:** cifras clave, una lectura rápida en frases, ensayos activos por
   fármaco, mapa fármaco × fase, ensayos por año y mecanismo, y laboratorios (Pierre Fabre
   resaltado). Paleta validada para daltonismo, etiquetas visibles y vista en tabla.
-- **Perfil de fármaco:** fases, estados, patrocinadores, artículos más citados y fichas FDA.
-- **Buscar documentos:** búsqueda híbrida con filtros, sin redactar respuesta.
+- **Drug profile:** fases, estados, patrocinadores, artículos más citados y fichas FDA.
+- **Search documents:** búsqueda híbrida con filtros, sin redactar respuesta.
 
 Identidad visual: el sistema parte de la skill de diseño `design-taste-frontend`
 ([Taste Skill](https://github.com/Leonxlnx/taste-skill)): tinta azul marino, Host Grotesk para

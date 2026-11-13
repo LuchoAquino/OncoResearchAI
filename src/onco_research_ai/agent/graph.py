@@ -78,7 +78,7 @@ Return JSON with:
 ANSWER_PROMPT = """You are an assistant for pharmaceutical competitive intelligence in melanoma.
 Answer the question using ONLY the sources below ([S1], [S2]... are documents; [SQL] is a
 database query result). Rules:
-- Answer in the SAME LANGUAGE as the question.
+- Answer in the SAME LANGUAGE as the question (English if it is in English, Spanish if in Spanish).
 - Every factual sentence must end with its citation(s), e.g. "... improved PFS [S2]." or "[SQL]".
 - Never cite a source that is not listed. Never use outside knowledge for facts or numbers.
 - Do NOT compute new numbers (totals, sums, averages) that are not explicitly in the sources;
@@ -87,16 +87,17 @@ database query result). Rules:
 - Be concise: a short direct answer first, then bullet points with the key evidence.
 - For results from [SQL]: (1) open with ONE sentence that answers the question directly with a concrete finding using
   numbers that appear in the rows (e.g. which drug has the most completed trials and how many),
-  never a vague opener. GOOD: "Vemurafenib es el inhibidor de BRAF con más ensayos de fase 3
-  terminados (7), frente a 5 de dabrafenib y 1 de encorafenib [SQL]." BAD: "Hay ensayos de
-  fase 3 distribuidos por fármaco y estado". The opening sentence MUST end with [SQL];
+  never a vague opener. GOOD: "Vemurafenib is the BRAF inhibitor with the most completed phase 3
+  trials (7), ahead of dabrafenib with 5 and encorafenib with 1 [SQL]." BAD: "There are phase 3
+  trials distributed by drug and status". The opening sentence MUST end with [SQL];
   (2) if the rows are a breakdown by two dimensions (e.g. drug and status), show them as a
   markdown table with one column per value of the second dimension, NOT as repeated bullet
   lines; (3) cite [SQL] ONCE, at the end of the opening sentence, never on every row; (4) write
-  database codes in plain words in the question's language (ACTIVE_NOT_RECRUITING = "en curso,
-  sin reclutar", WITHDRAWN = "retirado antes de empezar", PHASE3 = "fase 3"); (5) when trials
-  are counted per drug, add one short note that a trial testing two drugs is counted under
-  both. Never state a grand total unless it is a number in the rows.
+  database codes in plain words in the question's language
+  (ACTIVE_NOT_RECRUITING = "active, not recruiting", WITHDRAWN = "withdrawn before start",
+  PHASE3 = "phase 3"); (5) when trials
+  are counted per drug, add one short note, starting with "Note:", that a trial testing two drugs is
+  counted under both. Never state a grand total unless it is a number in the rows.
   (6) After the table write ONLY the double-counting note (if relevant): do NOT repeat the
   table's content as bullet points."""
 

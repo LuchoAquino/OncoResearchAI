@@ -86,3 +86,11 @@ def test_malformed_citation_like_V5_is_flagged_as_invalid():
         ]
         == []
     )
+
+
+def test_sql_schema_keeps_braf_and_mek_classes_apart():
+    from onco_research_ai.agent.sql_tool import SCHEMA
+
+    assert "d.mechanism = 'BRAF inhibitor'" in SCHEMA
+    assert "(encorafenib, dabrafenib, vemurafenib)" in SCHEMA
+    assert "must not\ninclude binimetinib" in SCHEMA

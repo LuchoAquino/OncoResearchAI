@@ -1,6 +1,6 @@
-"""Interfaz de OncoResearchAI (Streamlit). Consume la API REST: no toca la base de datos.
+"""OncoResearchAI interface (Streamlit). It uses the REST API and never touches the database.
 
-uv run streamlit run app/streamlit_app.py      (con la API corriendo en el puerto 8000)
+uv run streamlit run app/streamlit_app.py      (with the API running on port 8000)
 """
 
 import html
@@ -180,7 +180,7 @@ a {{ color: {T["blue"]}; text-decoration-color: {T["blue"]}; text-underline-offs
     unsafe_allow_html=True,
 )
 
-# Paleta categórica validada (orden fijo: el color sigue al mecanismo, nunca al ranking).
+# Categorical palette, validated (fixed order: the color follows the mechanism, never the ranking).
 MECHANISMS = [
     "BRAF inhibitor",
     "MEK inhibitor",
@@ -196,31 +196,48 @@ PALETTE = (
 MECH_SCALE = alt.Scale(domain=MECHANISMS, range=PALETTE)
 SEQ = (
     ["#1a2233", "#5d6b94", "#c9d1ea"] if DARK else ["#eef0f6", "#7b86a8", "#1f2b4d"]
-)  # un solo tono (marino)
+)  # one hue (navy)
 SOURCE_KIND = {
-    "trial": "Ensayo clínico",
-    "publication": "Artículo",
-    "label": "Ficha técnica FDA",
-    "congress": "Congreso (PDF)",
+    "trial": "Clinical trial",
+    "publication": "Article",
+    "label": "FDA label",
+    "congress": "Congress (PDF)",
 }
-HUMAN = {  # códigos de la base de datos -> palabras
-    "RECRUITING": "Reclutando",
-    "NOT_YET_RECRUITING": "Aún sin reclutar",
-    "ACTIVE_NOT_RECRUITING": "En curso, sin reclutar",
-    "ENROLLING_BY_INVITATION": "Reclutando por invitación",
-    "COMPLETED": "Terminado",
-    "TERMINATED": "Parado antes de acabar",
-    "WITHDRAWN": "Retirado antes de empezar",
-    "SUSPENDED": "Suspendido",
-    "UNKNOWN": "Estado desconocido",
-    "EARLY_PHASE1": "Fase 0-1",
-    "PHASE1": "Fase 1",
-    "PHASE2": "Fase 2",
-    "PHASE3": "Fase 3",
-    "PHASE4": "Fase 4",
-    "INDUSTRY": "Industria",
-    "NIH": "NIH (EE. UU.)",
-    "OTHER": "Hospital / universidad / otros",
+# Database codes -> plain words. CODES is applied to free text and tables; "NA" is left out of
+# it on purpose (it would rewrite the word in running text) and lives only in PHASE_COL.
+PHASE_COL = {
+    "EARLY_PHASE1": "Phase 0-1",
+    "PHASE1": "Phase 1",
+    "PHASE2": "Phase 2",
+    "PHASE3": "Phase 3",
+    "PHASE4": "Phase 4",
+    "NA": "N/A",
+    "NO_PHASE": "No phase",
+}
+PHASE_ORDER = list(PHASE_COL.values())
+CODES = {
+    "RECRUITING": "Recruiting",
+    "NOT_YET_RECRUITING": "Not yet recruiting",
+    "ACTIVE_NOT_RECRUITING": "Active, not recruiting",
+    "ENROLLING_BY_INVITATION": "Enrolling by invitation",
+    "COMPLETED": "Completed",
+    "TERMINATED": "Terminated early",
+    "WITHDRAWN": "Withdrawn before start",
+    "SUSPENDED": "Suspended",
+    "UNKNOWN": "Status unknown",
+    "AVAILABLE": "Available",
+    "NO_LONGER_AVAILABLE": "No longer available",
+    **{k: v for k, v in PHASE_COL.items() if k != "NA"},
+}
+# Sponsor classes: only for table cells (in running text "NIH" is just the institute's name).
+SPONSOR_CLASS = {
+    "INDUSTRY": "Industry",
+    "NIH": "NIH (US)",
+    "OTHER": "Hospital / university / other",
+    "OTHER_GOV": "Other government",
+    "FED": "US federal",
+    "NETWORK": "Research network",
+    "INDIV": "Individual",
 }
 MECH_CLASS = {
     "BRAF inhibitor": "braf",
@@ -230,22 +247,31 @@ MECH_CLASS = {
     "anti-LAG-3": "lag3",
 }
 ROUTE = {
-    "sql": "Consultó la base de datos (recuento exacto)",
-    "search": "Buscó en los textos de ensayos, artículos y fichas",
-    "both": "Consultó la base de datos y buscó en los textos",
+    "sql": "Queried the database (exact count)",
+    "search": "Searched the texts of trials, articles and labels",
+    "both": "Queried the database and searched the texts",
 }
 
 
 def num(n: int) -> str:
-    """3782 -> '3 782' (separador de miles con espacio, como en el resto del proyecto)."""
-    return f"{n:,}".replace(",", "\u202f")  # espacio fino que no se parte en dos líneas
+    """3782 -> '3,782'."""
+    return f"{n:,}"
 
 
 def humanize(text: str) -> str:
-    """Códigos de la base de datos -> palabras, aunque el modelo no los haya traducido."""
-    for code, label in HUMAN.items():
-        text = re.sub(rf"\b{code}\b", label, text)
+    """Database codes -> words, even if the model did not translate them."""
+    for code in sorted(CODES, key=len, reverse=True):
+        text = re.sub(rf"\b{code}\b", CODES[code], text)
     return text
+
+
+def pretty(df: pd.DataFrame) -> pd.DataFrame:
+    """Same table with codes in plain words (status, phase, sponsor type)."""
+    return df.replace({**CODES, **SPONSOR_CLASS})
+
+
+def phase_label(code: str) -> str:
+    return PHASE_COL.get(code, code)
 
 
 def esc(x) -> str:
@@ -271,7 +297,7 @@ def styled(chart: alt.Chart, height: int = 320) -> alt.Chart:
             labelColor=T["muted"],
             titleColor=T["muted"],
             orient="bottom",
-            columns=3,  # dos filas: con una sola se cortaba «anti-CTLA-4» y faltaba «anti-LAG-3»
+            columns=3,  # two rows: on a single row "anti-CTLA-4" was cut and "anti-LAG-3" missing
             labelLimit=0,
             labelFont="Host Grotesk",
         )
@@ -279,7 +305,7 @@ def styled(chart: alt.Chart, height: int = 320) -> alt.Chart:
     )
 
 
-# ---------------------------------------------------------------- acceso a la API
+# ---------------------------------------------------------------- API access
 @st.cache_data(ttl=300, show_spinner=False)
 def get(path: str, **params):
     r = httpx.get(
@@ -303,7 +329,7 @@ def source_html(s: dict, score: float | None = None) -> str:
             ident if s["source"] in ("trial", "publication") else None,
             str(s["year"]) if s.get("year") else None,
             f"p. {s['page']}" if s.get("page") else None,
-            f"relevancia {score:.2f}" if score is not None else None,
+            f"relevance {score:.2f}" if score is not None else None,
         )
         if x
     )
@@ -324,34 +350,33 @@ def chips(items: list[tuple[str, str]]) -> str:
     )
 
 
-# ---------------------------------------------------------------- comprobación de la API
+# ---------------------------------------------------------------- API check
 try:
     health = get("/health")
 except Exception:  # noqa: BLE001
     st.error(
-        f"La interfaz no encuentra la API en {API}. Ábrela en otra terminal con `make api` "
-        "(o `uv run uvicorn onco_research_ai.api.main:app --port 8000`) y recarga esta página."
+        f"The interface cannot reach the API at {API}. Start it in another terminal with "
+        "`make api` (or `uv run uvicorn onco_research_ai.api.main:app --port 8000`) and "
+        "reload this page."
     )
     st.stop()
 pg = health["postgres"]
 DRUGS = get("/drugs")
 
-# ---------------------------------------------------------------- barra lateral
+# ---------------------------------------------------------------- sidebar
 with st.sidebar:
     st.markdown(
         '<div class="side-title"><i></i>OncoResearchAI</div>', unsafe_allow_html=True
     )
-    st.caption("Inteligencia competitiva en melanoma a partir de datos públicos.")
+    st.caption("Competitive intelligence on melanoma from public data.")
     st.markdown(
         f"""<div class="side-stats">
-<b>{num(pg["trials"])}</b> ensayos clínicos (ClinicalTrials.gov)<br>
-<b>{num(pg["publications"])}</b> artículos científicos (Europe PMC)<br>
-<b>{pg["labels"]}</b> fichas técnicas (FDA)</div>""",
+<b>{num(pg["trials"])}</b> clinical trials (ClinicalTrials.gov)<br>
+<b>{num(pg["publications"])}</b> scientific articles (Europe PMC)<br>
+<b>{pg["labels"]}</b> FDA labels</div>""",
         unsafe_allow_html=True,
     )
-    st.markdown(
-        '<div class="side-eyebrow">Fármacos seguidos</div>', unsafe_allow_html=True
-    )
+    st.markdown('<div class="side-eyebrow">Tracked drugs</div>', unsafe_allow_html=True)
     by_mech: dict[str, list[str]] = {}
     for d in DRUGS:
         by_mech.setdefault(d["mechanism"], []).append(d["name"])
@@ -362,64 +387,62 @@ with st.sidebar:
                 + chips([(MECH_CLASS[mech], n) for n in by_mech[mech]]),
                 unsafe_allow_html=True,
             )
-    st.caption(
-        "Las preguntas sobre otros fármacos solo se responden con lo que digan los textos."
-    )
+    st.caption("Questions about other drugs are answered only from what the texts say.")
 
 tab_ask, tab_land, tab_drug, tab_search = st.tabs(
     [
-        ":material/forum: Preguntar",
-        ":material/monitoring: Panorama competitivo",
-        ":material/medication: Perfil de fármaco",
-        ":material/search: Buscar documentos",
+        ":material/forum: Ask",
+        ":material/monitoring: Competitive landscape",
+        ":material/medication: Drug profile",
+        ":material/search: Search documents",
     ]
 )
 
-# ---------------------------------------------------------------- 1. preguntar
+# ---------------------------------------------------------------- 1. ask
 EXAMPLES = {
-    "Datos exactos": (
-        "Recuentos y listas: el asistente escribe una consulta a la base de datos.",
+    "Exact data": (
+        "Counts and lists: the assistant writes a database query.",
         [
-            "¿Cuántos ensayos de fase 3 hay con inhibidores de BRAF, por fármaco y estado?",
-            "¿Qué ensayos de fase 3 ha patrocinado Pierre Fabre y en qué estado están?",
+            "How many phase 3 trials use BRAF inhibitors, by drug and status?",
+            "Which phase 3 trials has Pierre Fabre sponsored, and what is their status?",
         ],
     ),
-    "Contenido de los documentos": (
-        "Resultados, seguridad, mecanismos: el asistente lee ensayos, artículos y fichas.",
+    "Document content": (
+        "Results, safety, mechanisms: the assistant reads trials, articles and labels.",
         [
-            "¿Qué reacciones adversas describe la ficha técnica de Braftovi?",
+            "What adverse reactions does the Braftovi FDA label describe?",
             "What are the main resistance mechanisms to BRAF inhibitors?",
         ],
     ),
-    "Las dos cosas": (
-        "Una lista de ensayos más lo que dicen sus documentos.",
-        ["¿Qué ensayos de fase 3 con encorafenib están activos y qué comparan?"],
+    "Both": (
+        "A list of trials plus what their documents say.",
+        ["Which active phase 3 trials use encorafenib, and what do they compare?"],
     ),
 }
 
 with tab_ask:
     st.session_state.setdefault("history", [])
     st.markdown(
-        f"""<div class="hero"><div class="eyebrow">Asistente</div>
-<h1>Pregunta sobre el panorama del melanoma</h1>
-<p>Escribe una pregunta en español o en inglés. El asistente busca en {num(pg["trials"])} ensayos,
-{num(pg["publications"])} artículos y {pg["labels"]} fichas técnicas, y responde citando de dónde sale
-cada dato.</p></div>
+        f"""<div class="hero"><div class="eyebrow">Assistant</div>
+<h1>Ask about the melanoma landscape</h1>
+<p>Ask in English (Spanish also works). The assistant searches {num(pg["trials"])} clinical
+trials, {num(pg["publications"])} scientific articles and {pg["labels"]} FDA labels, and cites
+where each fact comes from.</p></div>
 <div class="expect">
-<div><b>Tarda de 3 a 20 segundos</b><span>La primera pregunta tarda más porque carga los modelos.</span></div>
-<div><b>Cada dato lleva su fuente</b><span>[S1], [S2]… son documentos que puedes abrir; [SQL] es un
-recuento exacto de la base de datos.</span></div>
-<div><b>La respuesta se verifica sola</b><span>Una etiqueta indica si todas las citas y cifras están
-respaldadas, o qué conviene revisar.</span></div>
+<div><b>Takes 3 to 20 seconds</b><span>The first question takes longer because the models load.</span></div>
+<div><b>Every fact has its source</b><span>[S1], [S2]… are documents you can open; [SQL] is an
+exact count from the database.</span></div>
+<div><b>The answer checks itself</b><span>A label says whether every citation and number is backed
+by a source, or what to review.</span></div>
 </div>""",
         unsafe_allow_html=True,
     )
 
     question = st.chat_input(
-        "Escribe tu pregunta, por ejemplo: ¿qué ensayos de relatlimab están activos?"
+        "Type your question, for example: which relatlimab trials are active?"
     )
     clicked = None
-    if not st.session_state.history:  # estado vacío: enseñar qué se puede preguntar
+    if not st.session_state.history:  # empty state: show what can be asked
         cols = st.columns(3, gap="large")
         for col, (group, (hint, qs)) in zip(cols, EXAMPLES.items(), strict=True):
             with col:
@@ -434,25 +457,25 @@ respaldadas, o qué conviene revisar.</span></div>
     question = question or clicked
 
     if question:
-        with st.status("Trabajando en tu pregunta…", expanded=True) as status:
+        with st.status("Working on your question…", expanded=True) as status:
+            st.write("Deciding whether it needs a count, a text search or both.")
             st.write(
-                "Decidiendo si hace falta un recuento, una búsqueda en textos o ambas cosas."
+                "Searching and querying, then writing the answer and checking every citation."
             )
-            st.write("Buscando y consultando; después redacta y verifica cada cita.")
             try:
                 res = post("/ask", {"question": question})
                 st.session_state.history.insert(0, res)
                 status.update(
-                    label=f"Listo en {res['timings']['total']:.0f} s",
+                    label=f"Done in {res['timings']['total']:.0f} s",
                     state="complete",
                     expanded=False,
                 )
-                st.rerun()  # vuelve a dibujar sin los ejemplos y con la respuesta arriba
+                st.rerun()  # redraw without the examples and with the answer on top
             except Exception as exc:  # noqa: BLE001
-                status.update(label="No se pudo responder", state="error")
+                status.update(label="Could not answer", state="error")
                 st.error(
-                    f"El asistente falló ({exc}). Si dice 429, se agotó la cuota por minuto de Groq: "
-                    "espera un minuto y vuelve a intentarlo."
+                    f"The assistant failed ({exc}). If it says 429, the free Groq per-minute "
+                    "quota ran out: wait a minute and try again."
                 )
 
     for i, res in enumerate(st.session_state.history):
@@ -466,99 +489,105 @@ respaldadas, o qué conviene revisar.</span></div>
         badges = [("accent", ROUTE[res["route"]])]
         if c.get("invalid"):
             badges.append(
-                ("warn", "Cita mal escrita o inexistente: " + ", ".join(c["invalid"]))
+                (
+                    "warn",
+                    "Malformed or non-existent citation: " + ", ".join(c["invalid"]),
+                )
             )
         if c.get("unsupported_numbers"):
             badges.append(
-                ("warn", "Cifras sin respaldo: " + ", ".join(c["unsupported_numbers"]))
+                (
+                    "warn",
+                    "Numbers without support: " + ", ".join(c["unsupported_numbers"]),
+                )
             )
         if c.get("uncited_sentences"):
-            badges.append(("warn", f"{len(c['uncited_sentences'])} frase(s) sin cita"))
+            badges.append(
+                ("warn", f"{len(c['uncited_sentences'])} sentence(s) without citation")
+            )
         if len(badges) == 1:
-            badges.append(("ok", "Citas y cifras verificadas"))
+            badges.append(("ok", "Citations and numbers verified"))
         st.markdown(chips(badges), unsafe_allow_html=True)
 
         left, right = st.columns([3, 2], gap="large")
         with left:
             st.markdown(humanize(res["answer"]))
             t = res["timings"]
-            steps = [f"<b>Planificar</b> {t.get('plan', 0):.1f} s"]
+            steps = [f"<b>Plan</b> {t.get('plan', 0):.1f} s"]
             if "sql" in t:
-                steps.append(f"<b>Base de datos</b> {t['sql']:.1f} s")
+                steps.append(f"<b>Database</b> {t['sql']:.1f} s")
             if "search" in t:
-                steps.append(f"<b>Búsqueda</b> {t['search']:.1f} s")
-            steps.append(f"<b>Redactar</b> {t.get('generate', 0):.1f} s")
+                steps.append(f"<b>Search</b> {t['search']:.1f} s")
+            steps.append(f"<b>Write</b> {t.get('generate', 0):.1f} s")
             extra = (
-                " · reescrita tras la verificación"
-                if res.get("attempts", 1) > 1
-                else ""
+                " · rewritten after verification" if res.get("attempts", 1) > 1 else ""
             )
             st.markdown(
                 f'<div class="steps">{" → ".join(steps)} · total {t["total"]:.1f} s{extra}</div>',
                 unsafe_allow_html=True,
             )
             if res.get("sql") and res["sql"].get("sql"):
-                # Los datos exactos, a la vista y en lenguaje normal. Si la respuesta ya trae
-                # su propia tabla, no se repiten.
+                # The exact data, in view and in plain words. If the answer already has its own
+                # table, it is not repeated.
                 if res["sql"]["rows"] and "|---" not in res["answer"]:
                     st.markdown(
-                        '<div class="eyebrow" style="margin-top:1rem">Datos de la base de datos</div>',
+                        '<div class="eyebrow" style="margin-top:1rem">Database data</div>',
                         unsafe_allow_html=True,
                     )
                     df = pd.DataFrame(res["sql"]["rows"], columns=res["sql"]["columns"])
-                    st.dataframe(df.replace(HUMAN), hide_index=True, width="stretch")
-                with st.expander("Ver la consulta SQL (para quien quiera comprobarla)"):
+                    st.dataframe(pretty(df), hide_index=True, width="stretch")
+                with st.expander("View the SQL query (to check it yourself)"):
                     st.code(res["sql"]["sql"], language="sql")
         with right:
             cited = res["cited_sources"]
             from_db = bool(res.get("sql") and res["sql"].get("rows"))
             if cited:
                 st.markdown(
-                    f'<div class="eyebrow">Fuentes citadas · {len(cited)}</div>',
+                    f'<div class="eyebrow">Cited sources · {len(cited)}</div>',
                     unsafe_allow_html=True,
                 )
                 st.markdown(
                     "".join(source_html(s) for s in cited), unsafe_allow_html=True
                 )
-            elif from_db:  # respuesta que sale solo de la base de datos
+            elif from_db:  # answer that comes only from the database
                 st.markdown(
-                    '<div class="eyebrow">De dónde sale</div>'
-                    '<div class="src s-trial"><div class="top"><span class="kind">Base de datos</span></div>'
-                    "<a>Recuento exacto sobre los ensayos de ClinicalTrials.gov</a>"
-                    '<div class="snip">No es una estimación: se cuenta fila por fila. '
-                    "La tabla de la izquierda son esos datos.</div></div>",
+                    '<div class="eyebrow">Where it comes from</div>'
+                    '<div class="src s-trial"><div class="top"><span class="kind">Database</span></div>'
+                    "<a>Exact count over the ClinicalTrials.gov trials</a>"
+                    '<div class="snip">Not an estimate: it is counted row by row. '
+                    "The table on the left is that data.</div></div>",
                     unsafe_allow_html=True,
                 )
             else:
                 st.markdown(
-                    '<div class="eyebrow">Fuentes citadas · 0</div>',
+                    '<div class="eyebrow">Cited sources · 0</div>',
                     unsafe_allow_html=True,
                 )
-                st.caption("No encontró documentos que respondan a la pregunta.")
+                st.caption("No documents found that answer the question.")
             others = [s for s in res["sources"] if s not in cited]
             if others:
-                with st.expander(f"Otros {len(others)} documentos consultados"):
+                with st.expander(f"{len(others)} other documents consulted"):
                     st.markdown(
                         "".join(source_html(s) for s in others), unsafe_allow_html=True
                     )
 
-# ---------------------------------------------------------------- 2. panorama
+# ---------------------------------------------------------------- 2. landscape
 with tab_land:
     land = get("/landscape")
     active = pd.DataFrame(land["active_by_drug"])
     tot = land["totals"]
     st.markdown(
-        '<div class="hero"><div class="eyebrow">Panorama competitivo</div>'
-        "<h1>Quién está haciendo qué en melanoma</h1>"
-        "<p>Ensayos clínicos que usan alguno de los 10 fármacos seguidos. Un ensayo está "
-        "<b>activo</b> si recluta o está en curso.</p></div>",
+        '<div class="hero"><div class="eyebrow">Competitive landscape</div>'
+        "<h1>Who is doing what in melanoma</h1>"
+        "<p>Clinical trials that use any of the 10 tracked drugs. A trial is "
+        "<b>active</b> if it is recruiting or ongoing.</p></div>",
         unsafe_allow_html=True,
     )
     m = st.columns(4)
-    m[0].metric("Ensayos con estos fármacos", tot["n_trials"])
-    m[1].metric("Activos hoy", tot["n_active"])
-    m[2].metric("Activos con inmunoterapia", tot["n_active_io"])
-    m[3].metric("Activos con terapia dirigida", tot["n_active_targeted"])
+    m[0].metric("Trials with these drugs", tot["n_trials"])
+    m[1].metric("Active today", tot["n_active"])
+    m[2].metric("Active with immunotherapy", tot["n_active_io"])
+    m[3].metric("Active with targeted therapy", tot["n_active_targeted"])
 
     top = active.sort_values("n_active", ascending=False).iloc[0]
     sp = pd.DataFrame(land["top_industry_sponsors"])
@@ -568,17 +597,18 @@ with tab_land:
     )
     lines = [
         (
-            f"La inmunoterapia está en {tot['n_active_io']} de los {tot['n_active']} ensayos activos; "
-            f"la terapia dirigida (BRAF/MEK), en {tot['n_active_targeted']} (algunos combinan las dos)."
+            f"Immunotherapy is in {tot['n_active_io']} of the {tot['n_active']} active trials; "
+            f"targeted therapy (BRAF/MEK) is in {tot['n_active_targeted']} "
+            "(some trials combine both)."
         ),
-        f"{top['drug'].capitalize()} es el fármaco con más ensayos activos ({top['n_active']}).",
-        "Entre los BRAF/MEK, "
+        f"{top['drug'].capitalize()} is the drug with the most active trials ({top['n_active']}).",
+        "Among BRAF/MEK drugs: "
         + ", ".join(f"{r.drug} ({r.n_active})" for r in targeted.head(3).itertuples())
         + ".",
     ]
     if not pf.empty:
         lines.append(
-            f"Pierre Fabre patrocina {int(pf['n'].iloc[0])} ensayos con estos fármacos."
+            f"Pierre Fabre sponsors {int(pf['n'].iloc[0])} trials with these drugs."
         )
     st.markdown(
         '<ul class="takeaways">'
@@ -587,75 +617,52 @@ with tab_land:
         unsafe_allow_html=True,
     )
     st.caption(
-        "En los gráficos por fármaco, un ensayo que combina dos fármacos aparece en ambos, y se "
-        "cuentan también los fármacos usados como comparador."
+        "In the per-drug charts, a trial that combines two drugs appears under both, and drugs "
+        "used as comparators are counted too."
     )
 
     left, right = st.columns(2, gap="large")
     with left:
-        st.markdown("**Ensayos activos por fármaco**")
+        st.markdown("**Active trials per drug**")
         order = active.sort_values("n_active", ascending=False)["drug"].tolist()
         base = alt.Chart(active).encode(
             y=alt.Y("drug:N", sort=order, title=None),
-            x=alt.X("n_active:Q", title="Ensayos activos"),
+            x=alt.X("n_active:Q", title="Active trials"),
             tooltip=[
-                alt.Tooltip("drug", title="Fármaco"),
-                alt.Tooltip("mechanism", title="Mecanismo"),
-                alt.Tooltip("n_active", title="Activos"),
+                alt.Tooltip("drug", title="Drug"),
+                alt.Tooltip("mechanism", title="Mechanism"),
+                alt.Tooltip("n_active", title="Active"),
                 alt.Tooltip("n_total", title="Total"),
             ],
         )
         bars = base.mark_bar(cornerRadiusEnd=4, size=16).encode(
-            color=alt.Color("mechanism:N", scale=MECH_SCALE, title="Mecanismo")
+            color=alt.Color("mechanism:N", scale=MECH_SCALE, title="Mechanism")
         )
         labels = base.mark_text(align="left", dx=4, color=T["ink"]).encode(
             text="n_active:Q"
         )
         st.altair_chart(styled(bars + labels), width="stretch", theme=None)
     with right:
-        st.markdown("**Ensayos por fármaco y fase**")
+        st.markdown("**Trials per drug and phase**")
         ph = pd.DataFrame(land["by_phase"])
-        phase_order = [
-            "EARLY_PHASE1",
-            "PHASE1",
-            "PHASE2",
-            "PHASE3",
-            "PHASE4",
-            "NA",
-            "NO_PHASE",
-        ]
-        ph["fase"] = ph["phase"].map(
-            {
-                "EARLY_PHASE1": "Fase 0-1",
-                "PHASE1": "Fase 1",
-                "PHASE2": "Fase 2",
-                "PHASE3": "Fase 3",
-                "PHASE4": "Fase 4",
-                "NA": "N/A",
-                "NO_PHASE": "Sin fase",
-            }
-        )
-        fase_order = [
-            "Fase 0-1",
-            "Fase 1",
-            "Fase 2",
-            "Fase 3",
-            "Fase 4",
-            "N/A",
-            "Sin fase",
-        ]
+        ph["phase_label"] = ph["phase"].map(phase_label)
         heat = alt.Chart(ph).encode(
-            x=alt.X("fase:N", sort=fase_order, title=None, axis=alt.Axis(labelAngle=0)),
+            x=alt.X(
+                "phase_label:N",
+                sort=PHASE_ORDER,
+                title=None,
+                axis=alt.Axis(labelAngle=0),
+            ),
             y=alt.Y("drug:N", title=None),
             tooltip=[
-                alt.Tooltip("drug", title="Fármaco"),
-                alt.Tooltip("fase", title="Fase"),
-                alt.Tooltip("n", title="Ensayos"),
+                alt.Tooltip("drug", title="Drug"),
+                alt.Tooltip("phase_label", title="Phase"),
+                alt.Tooltip("n", title="Trials"),
             ],
         )
         cells = heat.mark_rect(
             cornerRadius=3, stroke=T["surface"], strokeWidth=2
-        ).encode(color=alt.Color("n:Q", scale=alt.Scale(range=SEQ), title="Ensayos"))
+        ).encode(color=alt.Color("n:Q", scale=alt.Scale(range=SEQ), title="Trials"))
         text = heat.mark_text(fontSize=11).encode(
             text="n:Q",
             color=alt.condition(
@@ -668,7 +675,7 @@ with tab_land:
 
     left, right = st.columns(2, gap="large")
     with left:
-        st.markdown("**Ensayos iniciados por año y mecanismo**")
+        st.markdown("**Trials started per year and mechanism**")
         yr = pd.DataFrame(land["by_start_year"])
         yr["mechanism"] = yr["drug"].map(
             dict(zip(active["drug"], active["mechanism"], strict=True))
@@ -687,8 +694,8 @@ with tab_land:
                     title=None,
                     axis=alt.Axis(labelAngle=0, values=list(range(2008, 2027, 3))),
                 ),
-                y=alt.Y("n:Q", title="Ensayos iniciados"),
-                color=alt.Color("mechanism:N", scale=MECH_SCALE, title="Mecanismo"),
+                y=alt.Y("n:Q", title="Trials started"),
+                color=alt.Color("mechanism:N", scale=MECH_SCALE, title="Mechanism"),
             )
         )
         points = (
@@ -696,9 +703,9 @@ with tab_land:
             .encode(
                 opacity=alt.condition(hover, alt.value(1), alt.value(0)),
                 tooltip=[
-                    alt.Tooltip("year", title="Año"),
-                    alt.Tooltip("mechanism", title="Mecanismo"),
-                    alt.Tooltip("n", title="Ensayos"),
+                    alt.Tooltip("year", title="Year"),
+                    alt.Tooltip("mechanism", title="Mechanism"),
+                    alt.Tooltip("n", title="Trials"),
                 ],
             )
             .add_params(hover)
@@ -710,54 +717,56 @@ with tab_land:
             .transform_filter(hover)
         )
         st.altair_chart(styled(lines_c + points + rule), width="stretch", theme=None)
-        st.caption("El año en curso está incompleto.")
+        st.caption("The current year is incomplete.")
     with right:
-        st.markdown("**Laboratorios con más ensayos**")
-        sp["destacado"] = sp["sponsor"].str.contains("Pierre Fabre", case=False)
+        st.markdown("**Companies with the most trials**")
+        sp["highlight"] = sp["sponsor"].str.contains("Pierre Fabre", case=False)
         b = alt.Chart(sp).encode(
             y=alt.Y("sponsor:N", sort="-x", title=None, axis=alt.Axis(labelLimit=220)),
-            x=alt.X("n:Q", title="Ensayos"),
+            x=alt.X("n:Q", title="Trials"),
             tooltip=[
-                alt.Tooltip("sponsor", title="Laboratorio"),
-                alt.Tooltip("n", title="Ensayos"),
+                alt.Tooltip("sponsor", title="Company"),
+                alt.Tooltip("n", title="Trials"),
             ],
         )
         chart = b.mark_bar(cornerRadiusEnd=4, size=14).encode(
             color=alt.condition(
-                alt.datum.destacado, alt.value(T["accent"]), alt.value(T["muted"])
+                alt.datum.highlight, alt.value(T["accent"]), alt.value(T["muted"])
             )
         ) + b.mark_text(align="left", dx=4, color=T["ink"]).encode(text="n:Q")
         st.altair_chart(styled(chart), width="stretch", theme=None)
-        st.caption("Pierre Fabre resaltado. Solo patrocinadores de la industria.")
+        st.caption("Pierre Fabre highlighted. Industry sponsors only.")
 
-    with st.expander("Ver los datos en tabla"):
+    with st.expander("View the data as tables"):
         st.dataframe(
             active.rename(
                 columns={
-                    "drug": "Fármaco",
-                    "mechanism": "Mecanismo",
-                    "n_total": "Ensayos",
-                    "n_active": "Activos",
+                    "drug": "Drug",
+                    "mechanism": "Mechanism",
+                    "n_total": "Trials",
+                    "n_active": "Active",
                 }
             ),
             hide_index=True,
         )
         st.dataframe(
-            ph.pivot_table(index="drug", columns="fase", values="n", fill_value=0),
+            ph.pivot_table(
+                index="drug", columns="phase_label", values="n", fill_value=0
+            ).reindex(columns=[c for c in PHASE_ORDER if c in set(ph["phase_label"])]),
             width="stretch",
         )
 
-# ---------------------------------------------------------------- 3. perfil de fármaco
+# ---------------------------------------------------------------- 3. drug profile
 with tab_drug:
     names = [d["name"] for d in DRUGS]
     st.markdown(
-        '<div class="hero"><div class="eyebrow">Perfil de fármaco</div>'
-        "<h1>Todo lo que hay sobre un fármaco</h1>"
-        "<p>Sus ensayos, los artículos que tratan de él y su ficha técnica de la FDA.</p></div>",
+        '<div class="hero"><div class="eyebrow">Drug profile</div>'
+        "<h1>Everything about a drug</h1>"
+        "<p>Its trials, the articles about it and its FDA label.</p></div>",
         unsafe_allow_html=True,
     )
     choice = st.selectbox(
-        "Fármaco",
+        "Drug",
         names,
         index=names.index("encorafenib") if "encorafenib" in names else 0,
         key="drug-choice",
@@ -767,29 +776,35 @@ with tab_drug:
         f"### {esc(p['name'].capitalize())}"
         + chips(
             [("accent", p["mechanism"])]
-            + [("", f"También: {s}") for s in p["synonyms"]]
+            + [("", f"Also known as: {s}") for s in p["synonyms"]]
         ),
         unsafe_allow_html=True,
     )
     m = st.columns(4)
-    m[0].metric("Ensayos", p["n_trials"])
-    m[1].metric("Artículos que lo mencionan", p["n_publications"]["n"])
+    m[0].metric("Trials", p["n_trials"])
+    m[1].metric("Articles mentioning it", p["n_publications"]["n"])
     m[2].metric(
-        "Artículos centrados en él",
+        "Articles about it",
         p["n_publications"]["n_about"],
-        help="El fármaco aparece en el título.",
+        help="The drug appears in the title.",
     )
-    m[3].metric("Fichas FDA", len(p["fda_labels"]))
+    m[3].metric("FDA labels", len(p["fda_labels"]))
     left, right = st.columns(2, gap="large")
     with left:
-        st.markdown("**Ensayos por fase**")
+        st.markdown("**Trials by phase**")
         dfp = pd.DataFrame(p["trials_by_phase"])
+        dfp["phase_label"] = dfp["phase"].map(phase_label)
         b = alt.Chart(dfp).encode(
-            x=alt.X("phase:N", title=None, axis=alt.Axis(labelAngle=0)),
-            y=alt.Y("n:Q", title="Ensayos"),
+            x=alt.X(
+                "phase_label:N",
+                sort=PHASE_ORDER,
+                title=None,
+                axis=alt.Axis(labelAngle=0),
+            ),
+            y=alt.Y("n:Q", title="Trials"),
             tooltip=[
-                alt.Tooltip("phase", title="Fase"),
-                alt.Tooltip("n", title="Ensayos"),
+                alt.Tooltip("phase_label", title="Phase"),
+                alt.Tooltip("n", title="Trials"),
             ],
         )
         color = (
@@ -807,31 +822,30 @@ with tab_drug:
             theme=None,
         )
     with right:
-        st.markdown("**Estado de los ensayos**")
+        st.markdown("**Trial status**")
         st.dataframe(
-            pd.DataFrame(p["trials_by_status"]).rename(
-                columns={"status": "Estado", "n": "Ensayos"}
+            pretty(pd.DataFrame(p["trials_by_status"])).rename(
+                columns={"status": "Status", "n": "Trials"}
             ),
             hide_index=True,
             width="stretch",
         )
-        st.markdown("**Principales patrocinadores**")
+        st.markdown("**Main sponsors**")
         st.dataframe(
-            pd.DataFrame(p["top_sponsors"]).rename(
-                columns={
-                    "sponsor": "Patrocinador",
-                    "sponsor_class": "Tipo",
-                    "n": "Ensayos",
-                }
+            pretty(pd.DataFrame(p["top_sponsors"])).rename(
+                columns={"sponsor": "Sponsor", "sponsor_class": "Type", "n": "Trials"}
             ),
             hide_index=True,
             width="stretch",
         )
-    st.markdown("**Ensayos más recientes**")
+    st.markdown("**Most recent trials**")
     rt = pd.DataFrame(p["recent_trials"])
     if not rt.empty:
-        rt["phases"] = rt["phases"].apply(lambda x: ", ".join(x) if x else "—")
+        rt["phases"] = rt["phases"].apply(
+            lambda x: " / ".join(phase_label(c) for c in x) if x else "—"
+        )
         rt["drugs"] = rt["drugs"].apply(", ".join)
+        rt = pretty(rt)
         st.dataframe(
             rt[
                 [
@@ -849,70 +863,72 @@ with tab_drug:
             width="stretch",
             column_config={
                 "nct_id": "NCT",
-                "brief_title": "Título",
-                "phases": "Fase",
-                "overall_status": "Estado",
-                "sponsor_name": "Patrocinador",
-                "start_date": "Inicio",
-                "drugs": "Fármacos",
-                "url": st.column_config.LinkColumn("Enlace", display_text="abrir"),
+                "brief_title": "Title",
+                "phases": "Phase",
+                "overall_status": "Status",
+                "sponsor_name": "Sponsor",
+                "start_date": "Start",
+                "drugs": "Drugs",
+                "url": st.column_config.LinkColumn("Link", display_text="open"),
             },
         )
     left, right = st.columns(2, gap="large")
     with left:
-        st.markdown("**Artículos más citados sobre él**")
+        st.markdown("**Most cited articles about it**")
         for a in p["top_publications"]:
             st.markdown(
-                f"- [{a['title']}]({a['url']}) · *{a['journal']}*, {a['pub_year']} · {a['cited_by_count']} citas"
+                f"- [{a['title']}]({a['url']}) · *{a['journal']}*, {a['pub_year']} · {a['cited_by_count']} citations"
             )
     with right:
-        st.markdown("**Fichas técnicas FDA**")
+        st.markdown("**FDA labels**")
         for lab in p["fda_labels"]:
             st.markdown(
                 f"- [{lab['brand_name'] or lab['generic_name']}]({lab['url']}) · "
                 f"{lab['manufacturer'] or ''} ({lab['effective_date']})"
             )
         if not p["fda_labels"]:
-            st.caption("Sin ficha FDA enlazada.")
+            st.caption("No linked FDA label.")
 
-# ---------------------------------------------------------------- 4. buscar documentos
+# ---------------------------------------------------------------- 4. search documents
 with tab_search:
     st.markdown(
-        '<div class="hero"><div class="eyebrow">Buscar documentos</div>'
-        "<h1>Encuentra los documentos sin pasar por el asistente</h1>"
-        "<p>Devuelve los fragmentos más relevantes, sin redactar una respuesta. Funciona mejor en "
-        "inglés, porque los documentos están en inglés.</p></div>",
+        '<div class="hero"><div class="eyebrow">Search documents</div>'
+        "<h1>Find documents without going through the assistant</h1>"
+        "<p>Returns the most relevant passages, without writing an answer. Works best in "
+        "English, because the documents are in English.</p></div>",
         unsafe_allow_html=True,
     )
     f = st.columns([4, 1, 1, 1])
     q = f[0].text_input(
-        "Qué buscas", "adverse events of encorafenib plus binimetinib", key="search-q"
+        "What are you looking for",
+        "adverse events of encorafenib plus binimetinib",
+        key="search-q",
     )
     src = f[1].selectbox(
-        "Tipo",
-        ["Todos", "trial", "publication", "label", "congress"],
+        "Type",
+        ["All", "trial", "publication", "label", "congress"],
         key="search-src",
         format_func=lambda x: SOURCE_KIND.get(x, x),
     )
-    drug = f[2].selectbox("Fármaco", ["Todos", *names], key="search-drug")
+    drug = f[2].selectbox("Drug", ["All", *names], key="search-drug")
     phase = f[3].selectbox(
-        "Fase",
-        ["Todas", "PHASE1", "PHASE2", "PHASE3", "PHASE4"],
+        "Phase",
+        ["All", "PHASE1", "PHASE2", "PHASE3", "PHASE4"],
         key="search-phase",
-        format_func=lambda x: x.replace("PHASE", "Fase "),
+        format_func=phase_label,
     )
     if q:
         body = {
             "query": q,
             "k": 8,
-            "source": None if src == "Todos" else src,
-            "drug": None if drug == "Todos" else drug,
-            "phase": None if phase == "Todas" else phase,
+            "source": None if src == "All" else src,
+            "drug": None if drug == "All" else drug,
+            "phase": None if phase == "All" else phase,
         }
-        with st.spinner("Buscando…"):
+        with st.spinner("Searching…"):
             hits = post("/search", body, timeout=120)
         if not hits:
-            st.info("Ningún documento cumple esos filtros. Prueba a quitar alguno.")
+            st.info("No document matches those filters. Try removing one.")
         cols = st.columns(2, gap="medium")
         for i, h in enumerate(hits):
             cols[i % 2].markdown(

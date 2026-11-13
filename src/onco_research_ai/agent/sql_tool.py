@@ -51,6 +51,15 @@ publication_extractions(publication_id, study_kind, treatment_line, n_patients, 
 
 Notes: count trials with COUNT(DISTINCT nct_id) when joining. Drug names are lowercase.
 Only the 10 drugs above are linked; other drugs only appear in free text (ILIKE).
+
+Drug classes (ALWAYS filter by d.mechanism; never list drug names by hand unless the user names
+specific drugs):
+  "BRAF inhibitors"  = d.mechanism = 'BRAF inhibitor'  (encorafenib, dabrafenib, vemurafenib)
+  "MEK inhibitors"   = d.mechanism = 'MEK inhibitor'   (binimetinib, trametinib, cobimetinib)
+  "targeted therapy" = BRAF inhibitor OR MEK inhibitor
+  "immunotherapy" / "checkpoint inhibitors" = d.mechanism LIKE 'anti-%'
+BRAF and MEK inhibitors are DIFFERENT classes: a question about BRAF inhibitors must not
+include binimetinib, trametinib or cobimetinib.
 """
 ALLOWED_TABLES = {
     "trials",

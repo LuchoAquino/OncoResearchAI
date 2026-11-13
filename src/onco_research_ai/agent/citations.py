@@ -37,10 +37,10 @@ def strip_citations(text: str) -> str:
 
 
 SOURCE_LABEL = {
-    "trial": "Ensayo clínico (ClinicalTrials.gov)",
-    "publication": "Artículo (Europe PMC)",
-    "label": "Ficha técnica FDA",
-    "congress": "Documento de congreso (PDF)",
+    "trial": "Clinical trial (ClinicalTrials.gov)",
+    "publication": "Article (Europe PMC)",
+    "label": "FDA label",
+    "congress": "Congress document (PDF)",
 }
 
 
@@ -78,7 +78,7 @@ def sources_from_hits(hits: list[Hit]) -> list[Source]:
 def format_context(sources: list[Source]) -> str:
     blocks = []
     for s in sources:
-        meta = f"{SOURCE_LABEL.get(s.source, s.source)}, {s.year or 's/f'}"
+        meta = f"{SOURCE_LABEL.get(s.source, s.source)}, {s.year or 'n.d.'}"
         if s.page:
             meta += f", p. {s.page}"
         blocks.append(f"[{s.ref}] {s.title} ({meta})\n{s.text}")
@@ -113,7 +113,7 @@ def check_citations(
         for s in re.split(r"(?<=[.!?])\s+|\n+", answer)
         if len(s.strip()) > 40
         # títulos, filas de tabla y notas aclaratorias no son afirmaciones
-        and not s.strip().startswith(("#", "|", "*Nota", "Nota"))
+        and not s.strip().startswith(("#", "|", "*Nota", "Nota", "*Note", "Note"))
         and not s.strip().endswith(":")
     ]
     uncited = [s for s in sentences if not refs_in(s)]

@@ -62,7 +62,7 @@ def search(req: SearchRequest) -> list[dict]:
 
     drug = queries.resolve_drug(req.drug) if req.drug else None
     if req.drug and not drug:
-        raise HTTPException(404, f"Fármaco desconocido: {req.drug}")
+        raise HTTPException(404, f"Unknown drug: {req.drug}")
     hits = get_retriever().search(
         req.query, k=req.k, source=req.source, drugs=drug, phases=req.phase
     )
@@ -87,7 +87,7 @@ def drug(name: str) -> dict:
     """Perfil de un fármaco. Acepta nombre genérico, marca o código (Keytruda, MK-3475...)."""
     profile = queries.drug_profile(name)
     if profile is None:
-        raise HTTPException(404, f"Fármaco desconocido: {name}")
+        raise HTTPException(404, f"Unknown drug: {name}")
     return profile
 
 
