@@ -149,6 +149,17 @@ a {{ color: {T["blue"]}; text-decoration-color: {T["blue"]}; text-underline-offs
   padding: .7rem 1rem .7rem 1.6rem; margin: .6rem 0 1.1rem; }}
 .takeaways li {{ color: {T["ink"]}; font-size: 1.02rem; margin-bottom: .35rem; }}
 
+/* ---- selector de modelo y medidor de uso (barra lateral) ---- */
+.usage {{ border: 1px solid rgba(255,255,255,.18); border-radius: 10px; padding: 10px 12px; margin: .5rem 0;
+  font-size: .9rem; line-height: 1.5; color: {T["side_muted"]}; }}
+.usage.sel {{ border-color: {T["accent"]}; background: rgba(255,255,255,.06); }}
+.usage b {{ color: #ffffff; font-weight: 600; }}
+.usage .name {{ display: block; color: #ffffff; font-weight: 600; font-size: .95rem; margin-bottom: 2px; }}
+.usage .bad {{ color: #ffc98a; }}
+.usage .bar {{ height: 6px; border-radius: 3px; background: rgba(255,255,255,.18); margin: 6px 0 4px; overflow: hidden; }}
+.usage .bar i {{ display: block; height: 100%; background: #6fe3b0; }}
+.usage .bar i.low {{ background: #ffb35c; }}
+
 /* ---- tablas dentro de la respuesta: se desplazan en su caja, no tapan la otra columna ---- */
 [data-testid="stMarkdownContainer"] table {{ display: block; max-width: 100%; overflow-x: auto;
   border-collapse: collapse; font-size: .95rem; }}
@@ -246,6 +257,11 @@ MECH_CLASS = {
     "anti-CTLA-4": "ctla4",
     "anti-LAG-3": "lag3",
 }
+MODEL_LABEL = {  # nombres cortos para las etiquetas (los completos vienen de la API)
+    "groq": "Groq gpt-oss-120b",
+    "gemini": "Gemini 3.1 Flash-Lite",
+    "local": "Local Qwen3 4B",
+}
 ROUTE = {
     "sql": "Queried the database (exact count)",
     "search": "Searched the texts of trials, articles and labels",
@@ -315,6 +331,53 @@ def get(path: str, **params):
     return r.json()
 
 
+def fetch_models() -> list[dict]:
+    """Estado y uso de los modelos. Sin caché: el uso cambia con cada pregunta."""
+    try:
+        return httpx.get(f"{API}/models", timeout=10).json()
+    except Exception:  # noqa: BLE001
+        return []
+
+
+def usage_card(m: dict, selected: bool) -> str:
+    """Tarjeta con lo que se sabe del uso de un modelo (ver llm/usage.py)."""
+    u = m["usage"]
+    rep = u.get("reported", {})
+    lines = []
+    if not m["available"]:
+        lines.append(f'<span class="bad">Unavailable: {esc(m["reason"])}</span>')
+    lines.append(
+        f"Today in this app: <b>{u['requests_today']}</b> requests · <b>{num(u['tokens_today'])}</b> tokens"
+    )
+    bar = ""
+    if "remaining_requests" in rep:  # Groq informa de lo que le queda
+        left, lim = rep["remaining_requests"], rep["limit_requests"]
+        pct = 100 * left / lim if lim else 0
+        low = " low" if pct < 15 else ""
+        bar = f'<div class="bar"><i class="{low.strip()}" style="width:{pct:.0f}%"></i></div>'
+        lines.append(f"Requests left today: <b>{num(left)}</b> of {num(lim)}")
+        lines.append(
+            f"Tokens left this minute: <b>{num(rep['remaining_tokens_minute'])}</b> "
+            f"of {num(rep['limit_tokens_minute'])}"
+        )
+    if "tokens_day_used" in rep:
+        used, lim = rep["tokens_day_used"], rep["tokens_day_limit"]
+        pct = max(0, 100 * (lim - used) / lim)
+        low = " low" if pct < 15 else ""
+        bar = f'<div class="bar"><i class="{low.strip()}" style="width:{pct:.0f}%"></i></div>'
+        lines.append(
+            f"Daily tokens: <b>{num(lim - used)}</b> left of {num(lim)} (as of the last limit error)"
+        )
+    if "requests_left_estimate" in u:
+        lines.append(
+            f"Estimated requests left today: <b>{u['requests_left_estimate']}</b> of "
+            f"{u['daily_request_limit']} (counts only this app)"
+        )
+    lines.append(esc(m["note"]))
+    cls = "usage sel" if selected else "usage"
+    return f'<div class="{cls}"><span class="name">{esc(m["label"])}</span>{bar}{"<br>".join(lines)}</div>'
+
+
 def post(path: str, body: dict, timeout: int = 180):
     r = httpx.post(f"{API}{path}", json=body, timeout=timeout)
     r.raise_for_status()
@@ -369,25 +432,56 @@ with st.sidebar:
         '<div class="side-title"><i></i>OncoResearchAI</div>', unsafe_allow_html=True
     )
     st.caption("Competitive intelligence on melanoma from public data.")
+
+    # ---- modelo de lenguaje: arriba, porque es lo que se toca más; se usa en la siguiente pregunta
     st.markdown(
-        f"""<div class="side-stats">
+        '<div class="side-eyebrow">Language model</div>', unsafe_allow_html=True
+    )
+    models = fetch_models()
+    if models:
+        keys = [m["key"] for m in models]
+        by_key = {m["key"]: m for m in models}
+        st.radio(
+            "Model for the next question",
+            keys,
+            key="model",
+            format_func=lambda k: (
+                by_key[k]["label"]
+                + ("" if by_key[k]["available"] else " (unavailable)")
+            ),
+            label_visibility="collapsed",
+        )
+        chosen = st.session_state.get("model", "groq")
+        for m in models:
+            st.markdown(usage_card(m, m["key"] == chosen), unsafe_allow_html=True)
+        st.caption(
+            "If the chosen model runs out of quota, the next available one answers, "
+            "and the answer says so."
+        )
+    else:
+        st.caption("Could not read the model list from the API.")
+
+    st.markdown(
+        f"""<div class="side-stats" style="margin-top:1rem">
 <b>{num(pg["trials"])}</b> clinical trials (ClinicalTrials.gov)<br>
 <b>{num(pg["publications"])}</b> scientific articles (Europe PMC)<br>
 <b>{pg["labels"]}</b> FDA labels</div>""",
         unsafe_allow_html=True,
     )
-    st.markdown('<div class="side-eyebrow">Tracked drugs</div>', unsafe_allow_html=True)
-    by_mech: dict[str, list[str]] = {}
-    for d in DRUGS:
-        by_mech.setdefault(d["mechanism"], []).append(d["name"])
-    for mech in MECHANISMS:
-        if mech in by_mech:
-            st.markdown(
-                f'<div class="side-eyebrow" style="margin-top:.6rem">{esc(mech)}</div>'
-                + chips([(MECH_CLASS[mech], n) for n in by_mech[mech]]),
-                unsafe_allow_html=True,
-            )
-    st.caption("Questions about other drugs are answered only from what the texts say.")
+    with st.expander(f"Tracked drugs ({len(DRUGS)})"):
+        by_mech: dict[str, list[str]] = {}
+        for d in DRUGS:
+            by_mech.setdefault(d["mechanism"], []).append(d["name"])
+        for mech in MECHANISMS:
+            if mech in by_mech:
+                st.markdown(
+                    f'<div class="side-eyebrow" style="margin-top:.4rem">{esc(mech)}</div>'
+                    + chips([(MECH_CLASS[mech], n) for n in by_mech[mech]]),
+                    unsafe_allow_html=True,
+                )
+        st.caption(
+            "Questions about other drugs are answered only from what the texts say."
+        )
 
 tab_ask, tab_land, tab_drug, tab_search = st.tabs(
     [
@@ -463,7 +557,13 @@ by a source, or what to review.</span></div>
                 "Searching and querying, then writing the answer and checking every citation."
             )
             try:
-                res = post("/ask", {"question": question})
+                res = post(
+                    "/ask",
+                    {
+                        "question": question,
+                        "model": st.session_state.get("model", "groq"),
+                    },
+                )
                 st.session_state.history.insert(0, res)
                 status.update(
                     label=f"Done in {res['timings']['total']:.0f} s",
@@ -487,6 +587,28 @@ by a source, or what to review.</span></div>
         )
         c = res["check"]
         badges = [("accent", ROUTE[res["route"]])]
+        llm = res.get("llm")
+        if llm:
+            names = {k: MODEL_LABEL.get(k, k) for k in llm["answered_by"]}
+            who = " + ".join(names.values()) or MODEL_LABEL.get(
+                llm["selected"], llm["selected"]
+            )
+            badges.append(("", f"Model: {who}"))
+            if llm["fell_back"]:
+                badges.append(
+                    (
+                        "warn",
+                        (
+                            f"{MODEL_LABEL.get(llm['selected'], llm['selected'])} was unavailable or out of quota: "
+                            "a different model answered"
+                        ),
+                    )
+                )
+            if "local" in llm["answered_by"]:
+                badges.append(("warn", "Small local model: check the cited sources"))
+        n_info = len(
+            badges
+        )  # etiquetas informativas; los avisos de verificación van después
         if c.get("invalid"):
             badges.append(
                 (
@@ -505,7 +627,7 @@ by a source, or what to review.</span></div>
             badges.append(
                 ("warn", f"{len(c['uncited_sentences'])} sentence(s) without citation")
             )
-        if len(badges) == 1:
+        if len(badges) == n_info:  # ningún aviso: todo verificado
             badges.append(("ok", "Citations and numbers verified"))
         st.markdown(chips(badges), unsafe_allow_html=True)
 

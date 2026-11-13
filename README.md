@@ -90,7 +90,7 @@ Necesitas Docker, [`uv`](https://docs.astral.sh/uv/), Python 3.12, una GPU NVIDI
 no obligatoria) y una clave gratuita de Groq ([console.groq.com](https://console.groq.com)).
 
 ```bash
-cp .env.example .env     # rellena las contraseñas de Postgres y GROQ_API_KEY
+cp .env.example .env     # rellena las contraseñas de Postgres y GROQ_API_KEY (y GEMINI_API_KEY, opcional)
 make install             # dependencias
 make pipeline            # Docker + descarga + carga en Postgres + calidad + índices (~15 min)
 make api                 # terminal 1: API en http://localhost:8000/docs
@@ -500,6 +500,34 @@ siempre el tema claro, aunque el sistema esté en modo oscuro (`.streamlit/confi
 Errores encontrados al revisar la interfaz con capturas: la cifra principal sumaba ensayos por
 fármaco (1 422) en lugar de contar ensayos distintos (972), y una cita escrita como `[S1, S2]`
 no se reconocía; ambos corregidos.
+
+### Elegir el modelo de lenguaje
+
+La barra lateral de la interfaz permite elegir, para cada pregunta, uno de tres modelos
+(se definen en una tabla, `llm/client.py`; añadir o cambiar uno es editar esa tabla):
+
+| Modelo | Cuota gratuita | Cuándo usarlo |
+|---|---|---|
+| Groq · gpt-oss-120b | 8 000 tokens/min, 200 000 tokens/día, 1 000 peticiones/día | Por defecto: el mejor y el más rápido |
+| Google · Gemini 3.1 Flash-Lite | Se ve en Google AI Studio | Respaldo en la nube cuando Groq se agota |
+| Local · Ollama (Qwen3 4B) | Sin límite; nada sale del equipo | Privacidad o sin cuota. Modelo pequeño: escribe mal el SQL y responde peor |
+
+Si el modelo elegido se queda sin cuota, contesta el siguiente disponible y la respuesta lo
+dice (etiqueta naranja), porque un modelo de respaldo más pequeño puede responder peor.
+
+**Cuánta cuota queda: qué se sabe de cada proveedor.** No es lo mismo en los tres, y la interfaz
+solo muestra lo que de verdad se puede saber:
+
+| | Qué se muestra |
+|---|---|
+| Todos | Peticiones y tokens gastados hoy **por esta aplicación** (`data/llm_usage.json`) |
+| Groq | Además, lo que informa en cada respuesta: peticiones que quedan hoy y tokens que quedan este minuto. El límite diario de tokens solo aparece tras un error por agotarlo |
+| Gemini | La API no informa de la cuota restante; solo se ve en Google AI Studio. Con `GEMINI_DAILY_REQUEST_LIMIT` en el `.env` se estima lo que queda a partir de lo contado aquí (no incluye lo que se gaste con la misma clave fuera de la app) |
+| Ollama | Sin límite |
+
+Para usar el modelo local hace falta Ollama y descargar el modelo una vez:
+`ollama pull qwen3:4b-instruct-2507-q4_K_M` (2,5 GB). Mientras está cargado ocupa unos 2,6 GB de
+RAM y ralentiza el resto del equipo.
 
 ## Fase 10 — Evaluación de las respuestas y PDFs de congresos
 

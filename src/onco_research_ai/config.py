@@ -11,6 +11,9 @@ class Settings(BaseSettings):
     postgres_port: int = 5432
     qdrant_http_port: int = 6333
     groq_api_key: str = ""
+    gemini_api_key: str = ""
+    # Opcional: peticiones/día de tu proyecto Gemini (míralo en Google AI Studio) para estimar lo que queda.
+    gemini_daily_request_limit: int = 0
 
     @property
     def postgres_url(self) -> URL:

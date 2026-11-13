@@ -26,7 +26,13 @@ from onco_research_ai.agent.citations import (
     sources_from_hits,
 )
 from onco_research_ai.agent.sql_tool import SQLResult, run_sql_tool
-from onco_research_ai.llm.client import complete, complete_json
+from onco_research_ai.llm.client import (
+    DEFAULT_MODEL,
+    MODELS,
+    complete,
+    complete_json,
+    use_model,
+)
 from onco_research_ai.processing.drugs_seed import SEED
 from onco_research_ai.retrieval.hybrid import Retriever
 
@@ -250,13 +256,20 @@ def build_graph():
 _graph = None
 
 
-def ask(question: str) -> dict:
-    """Punto de entrada: pregunta -> respuesta con fuentes, SQL usado y comprobación de citas."""
+def ask(question: str, model: str | None = None) -> dict:
+    """Punto de entrada: pregunta -> respuesta con fuentes, SQL usado y comprobación de citas.
+
+    `model` elige el LLM ("groq", "gemini", "local"); si se agota su cuota, contesta el
+    siguiente disponible y el resultado lo dice en "llm".
+    """
     global _graph
     if _graph is None:
         _graph = build_graph()
     t = time.time()
-    state = _graph.invoke({"question": question})
+    with use_model(model) as calls:
+        state = _graph.invoke({"question": question})
+    chosen = model if model in MODELS else DEFAULT_MODEL
+    answered_by = sorted(set(calls), key=calls.index)
     cited = set(state.get("check", {}).get("cited", []))
     sources = state.get("sources", [])
     return {
@@ -271,6 +284,12 @@ def ask(question: str) -> dict:
         "context": state.get("context", ""),  # lo que vio el LLM (para auditar/evaluar)
         "attempts": state.get("attempts", 0),
         "timings": {**state.get("timings", {}), "total": time.time() - t},
+        "llm": {
+            "selected": chosen,
+            "answered_by": answered_by,
+            "fell_back": any(k != chosen for k in answered_by),
+            "calls": len(calls),
+        },
     }
 
 

@@ -40,6 +40,9 @@ class AskRequest(BaseModel):
     question: str = Field(
         ..., min_length=3, examples=["¿Qué ensayos de fase 3 hay con encorafenib?"]
     )
+    model: Literal["groq", "gemini", "local"] | None = Field(
+        None, description="LLM to use. Default: groq. See GET /models."
+    )
 
 
 @app.get("/health")
@@ -69,12 +72,20 @@ def search(req: SearchRequest) -> list[dict]:
     return [{"score": round(h.score, 3), **h.payload} for h in hits]
 
 
+@app.get("/models")
+def models() -> list[dict]:
+    """The selectable LLMs, whether each is available now, and how much each has been used."""
+    from onco_research_ai.llm.client import models_status
+
+    return models_status()
+
+
 @app.post("/ask")
 def ask(req: AskRequest) -> dict:
     """Agente: decide entre SQL y búsqueda, responde citando y verifica sus citas."""
     from onco_research_ai.agent.graph import ask as agent_ask
 
-    return agent_ask(req.question)
+    return agent_ask(req.question, req.model)
 
 
 @app.get("/drugs")
