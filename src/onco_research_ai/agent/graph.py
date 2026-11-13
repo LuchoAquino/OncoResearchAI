@@ -84,7 +84,21 @@ database query result). Rules:
 - Do NOT compute new numbers (totals, sums, averages) that are not explicitly in the sources;
   report the numbers as given (a trial can appear in several SQL rows).
 - If the sources do not answer the question, say so clearly and say what is missing.
-- Be concise: a short direct answer first, then bullet points with the key evidence."""
+- Be concise: a short direct answer first, then bullet points with the key evidence.
+- For results from [SQL]: (1) open with ONE sentence that answers the question directly with a concrete finding using
+  numbers that appear in the rows (e.g. which drug has the most completed trials and how many),
+  never a vague opener. GOOD: "Vemurafenib es el inhibidor de BRAF con más ensayos de fase 3
+  terminados (7), frente a 5 de dabrafenib y 1 de encorafenib [SQL]." BAD: "Hay ensayos de
+  fase 3 distribuidos por fármaco y estado". The opening sentence MUST end with [SQL];
+  (2) if the rows are a breakdown by two dimensions (e.g. drug and status), show them as a
+  markdown table with one column per value of the second dimension, NOT as repeated bullet
+  lines; (3) cite [SQL] ONCE, at the end of the opening sentence, never on every row; (4) write
+  database codes in plain words in the question's language (ACTIVE_NOT_RECRUITING = "en curso,
+  sin reclutar", WITHDRAWN = "retirado antes de empezar", PHASE3 = "fase 3"); (5) when trials
+  are counted per drug, add one short note that a trial testing two drugs is counted under
+  both. Never state a grand total unless it is a number in the rows.
+  (6) After the table write ONLY the double-counting note (if relevant): do NOT repeat the
+  table's content as bullet points."""
 
 
 def plan_node(state: State) -> State:

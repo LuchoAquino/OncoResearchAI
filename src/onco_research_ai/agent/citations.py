@@ -112,7 +112,8 @@ def check_citations(
         s.strip()
         for s in re.split(r"(?<=[.!?])\s+|\n+", answer)
         if len(s.strip()) > 40
-        and not s.strip().startswith("#")
+        # títulos, filas de tabla y notas aclaratorias no son afirmaciones
+        and not s.strip().startswith(("#", "|", "*Nota", "Nota"))
         and not s.strip().endswith(":")
     ]
     uncited = [s for s in sentences if not refs_in(s)]

@@ -5,6 +5,7 @@ uv run streamlit run app/streamlit_app.py      (con la API corriendo en el puert
 
 import html
 import os
+import re
 
 import altair as alt
 import httpx
@@ -148,6 +149,13 @@ a {{ color: {T["blue"]}; text-decoration-color: {T["blue"]}; text-underline-offs
   padding: .7rem 1rem .7rem 1.6rem; margin: .6rem 0 1.1rem; }}
 .takeaways li {{ color: {T["ink"]}; font-size: 1.02rem; margin-bottom: .35rem; }}
 
+/* ---- tablas dentro de la respuesta: se desplazan en su caja, no tapan la otra columna ---- */
+[data-testid="stMarkdownContainer"] table {{ display: block; max-width: 100%; overflow-x: auto;
+  border-collapse: collapse; font-size: .95rem; }}
+[data-testid="stMarkdownContainer"] th {{ background: {T["blue_soft"]}; color: {T["ink"]}; font-weight: 600;
+  padding: 8px 12px; white-space: normal; }}
+[data-testid="stMarkdownContainer"] td {{ padding: 8px 12px; border-top: 1px solid {T["line"]}; }}
+
 /* ---- cifras, un color por columna ---- */
 [data-testid="stMetric"] {{ background: {T["card"]}; border: 1px solid {T["line"]}; border-top: 4px solid {T["blue"]};
   border-radius: 12px; padding: 12px 16px; }}
@@ -195,6 +203,25 @@ SOURCE_KIND = {
     "label": "Ficha técnica FDA",
     "congress": "Congreso (PDF)",
 }
+HUMAN = {  # códigos de la base de datos -> palabras
+    "RECRUITING": "Reclutando",
+    "NOT_YET_RECRUITING": "Aún sin reclutar",
+    "ACTIVE_NOT_RECRUITING": "En curso, sin reclutar",
+    "ENROLLING_BY_INVITATION": "Reclutando por invitación",
+    "COMPLETED": "Terminado",
+    "TERMINATED": "Parado antes de acabar",
+    "WITHDRAWN": "Retirado antes de empezar",
+    "SUSPENDED": "Suspendido",
+    "UNKNOWN": "Estado desconocido",
+    "EARLY_PHASE1": "Fase 0-1",
+    "PHASE1": "Fase 1",
+    "PHASE2": "Fase 2",
+    "PHASE3": "Fase 3",
+    "PHASE4": "Fase 4",
+    "INDUSTRY": "Industria",
+    "NIH": "NIH (EE. UU.)",
+    "OTHER": "Hospital / universidad / otros",
+}
 MECH_CLASS = {
     "BRAF inhibitor": "braf",
     "MEK inhibitor": "mek",
@@ -212,6 +239,13 @@ ROUTE = {
 def num(n: int) -> str:
     """3782 -> '3 782' (separador de miles con espacio, como en el resto del proyecto)."""
     return f"{n:,}".replace(",", "\u202f")  # espacio fino que no se parte en dos líneas
+
+
+def humanize(text: str) -> str:
+    """Códigos de la base de datos -> palabras, aunque el modelo no los haya traducido."""
+    for code, label in HUMAN.items():
+        text = re.sub(rf"\b{code}\b", label, text)
+    return text
 
 
 def esc(x) -> str:
@@ -446,7 +480,7 @@ respaldadas, o qué conviene revisar.</span></div>
 
         left, right = st.columns([3, 2], gap="large")
         with left:
-            st.markdown(res["answer"])
+            st.markdown(humanize(res["answer"]))
             t = res["timings"]
             steps = [f"<b>Planificar</b> {t.get('plan', 0):.1f} s"]
             if "sql" in t:
@@ -464,30 +498,42 @@ respaldadas, o qué conviene revisar.</span></div>
                 unsafe_allow_html=True,
             )
             if res.get("sql") and res["sql"].get("sql"):
-                with st.expander("Ver la consulta [SQL] y sus filas"):
+                # Los datos exactos, a la vista y en lenguaje normal. Si la respuesta ya trae
+                # su propia tabla, no se repiten.
+                if res["sql"]["rows"] and "|---" not in res["answer"]:
+                    st.markdown(
+                        '<div class="eyebrow" style="margin-top:1rem">Datos de la base de datos</div>',
+                        unsafe_allow_html=True,
+                    )
+                    df = pd.DataFrame(res["sql"]["rows"], columns=res["sql"]["columns"])
+                    st.dataframe(df.replace(HUMAN), hide_index=True, width="stretch")
+                with st.expander("Ver la consulta SQL (para quien quiera comprobarla)"):
                     st.code(res["sql"]["sql"], language="sql")
-                    if res["sql"]["rows"]:
-                        st.dataframe(
-                            pd.DataFrame(
-                                res["sql"]["rows"], columns=res["sql"]["columns"]
-                            ),
-                            hide_index=True,
-                        )
         with right:
             cited = res["cited_sources"]
-            st.markdown(
-                f'<div class="eyebrow">Fuentes citadas · {len(cited)}</div>',
-                unsafe_allow_html=True,
-            )
+            from_db = bool(res.get("sql") and res["sql"].get("rows"))
             if cited:
+                st.markdown(
+                    f'<div class="eyebrow">Fuentes citadas · {len(cited)}</div>',
+                    unsafe_allow_html=True,
+                )
                 st.markdown(
                     "".join(source_html(s) for s in cited), unsafe_allow_html=True
                 )
-            elif res.get("sql"):
-                st.caption(
-                    "La respuesta sale de la base de datos: abre «Ver la consulta [SQL]»."
+            elif from_db:  # respuesta que sale solo de la base de datos
+                st.markdown(
+                    '<div class="eyebrow">De dónde sale</div>'
+                    '<div class="src s-trial"><div class="top"><span class="kind">Base de datos</span></div>'
+                    "<a>Recuento exacto sobre los ensayos de ClinicalTrials.gov</a>"
+                    '<div class="snip">No es una estimación: se cuenta fila por fila. '
+                    "La tabla de la izquierda son esos datos.</div></div>",
+                    unsafe_allow_html=True,
                 )
             else:
+                st.markdown(
+                    '<div class="eyebrow">Fuentes citadas · 0</div>',
+                    unsafe_allow_html=True,
+                )
                 st.caption("No encontró documentos que respondan a la pregunta.")
             others = [s for s in res["sources"] if s not in cited]
             if others:
