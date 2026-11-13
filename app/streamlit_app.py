@@ -21,7 +21,10 @@ st.set_page_config(
 # type host): tinta azul marino sobre blanco, acento naranja SOLO en rellenos y marcas (como
 # texto tendría 2,3:1 de contraste), Host Grotesk para leer y JetBrains Mono para los códigos.
 # Texto de lectura a 16 px; nada por debajo de 13 px.
-DARK = st.context.theme.type == "dark"
+# Un solo tema, a propósito: .streamlit/config.toml fija el fondo CLARO. No se mira
+# st.context.theme.type, porque refleja el modo del sistema del usuario (oscuro) aunque el fondo
+# siga claro, y eso pintaba texto blanco sobre blanco. Fondo y texto salen del mismo sitio.
+DARK = False
 T = {  # tokens (los oscuros son la variante "inv" de la misma paleta)
     "bg": "#05070a" if DARK else "#ffffff",
     "surface": "#111417" if DARK else "#f4f4f2",
