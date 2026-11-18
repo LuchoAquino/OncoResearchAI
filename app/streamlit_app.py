@@ -498,7 +498,7 @@ EXAMPLES = {
         "Counts and lists: the assistant writes a database query.",
         [
             "How many phase 3 trials use BRAF inhibitors, by drug and status?",
-            "Which phase 3 trials has Pierre Fabre sponsored, and what is their status?",
+            "Which companies sponsor the most phase 3 trials with immunotherapy drugs?",
         ],
     ),
     "Document content": (
@@ -713,7 +713,6 @@ with tab_land:
 
     top = active.sort_values("n_active", ascending=False).iloc[0]
     sp = pd.DataFrame(land["top_industry_sponsors"])
-    pf = sp[sp["sponsor"].str.contains("Pierre Fabre", case=False)]
     targeted = active[active["mechanism"].str.contains("inhibitor")].sort_values(
         "n_active", ascending=False
     )
@@ -728,10 +727,6 @@ with tab_land:
         + ", ".join(f"{r.drug} ({r.n_active})" for r in targeted.head(3).itertuples())
         + ".",
     ]
-    if not pf.empty:
-        lines.append(
-            f"Pierre Fabre sponsors {int(pf['n'].iloc[0])} trials with these drugs."
-        )
     st.markdown(
         '<ul class="takeaways">'
         + "".join(f"<li>{esc(x)}</li>" for x in lines)
@@ -842,7 +837,6 @@ with tab_land:
         st.caption("The current year is incomplete.")
     with right:
         st.markdown("**Companies with the most trials**")
-        sp["highlight"] = sp["sponsor"].str.contains("Pierre Fabre", case=False)
         b = alt.Chart(sp).encode(
             y=alt.Y("sponsor:N", sort="-x", title=None, axis=alt.Axis(labelLimit=220)),
             x=alt.X("n:Q", title="Trials"),
@@ -851,13 +845,11 @@ with tab_land:
                 alt.Tooltip("n", title="Trials"),
             ],
         )
-        chart = b.mark_bar(cornerRadiusEnd=4, size=14).encode(
-            color=alt.condition(
-                alt.datum.highlight, alt.value(T["accent"]), alt.value(T["muted"])
-            )
-        ) + b.mark_text(align="left", dx=4, color=T["ink"]).encode(text="n:Q")
+        chart = b.mark_bar(cornerRadiusEnd=4, size=14, color=T["accent"]) + b.mark_text(
+            align="left", dx=4, color=T["ink"]
+        ).encode(text="n:Q")
         st.altair_chart(styled(chart), width="stretch", theme=None)
-        st.caption("Pierre Fabre highlighted. Industry sponsors only.")
+        st.caption("Industry sponsors only.")
 
     with st.expander("View the data as tables"):
         st.dataframe(

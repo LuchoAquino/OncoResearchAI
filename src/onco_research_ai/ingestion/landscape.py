@@ -4,8 +4,8 @@ from datetime import date
 
 CONDITION = "melanoma"
 
-# Fármacos de referencia: terapia dirigida BRAF/MEK (incluye encorafenib + binimetinib,
-# los de Pierre Fabre) e inmunoterapia (anti-PD-1, anti-CTLA-4, anti-LAG-3).
+# Fármacos de referencia: terapia dirigida BRAF/MEK
+# e inmunoterapia (anti-PD-1, anti-CTLA-4, anti-LAG-3).
 DRUGS = [
     "encorafenib",
     "binimetinib",

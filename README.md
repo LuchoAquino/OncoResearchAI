@@ -1,674 +1,724 @@
 # OncoResearchAI
 
-**Un asistente que responde preguntas sobre el panorama competitivo del melanoma, citando
-siempre sus fuentes.**
+**A research assistant for melanoma drugs: ask a question in plain language and get an answer
+built from scientific literature, clinical trials and FDA labels, with every claim cited.**
 
-Los laboratorios farmacéuticos necesitan saber qué están desarrollando sus competidores: qué
-ensayos clínicos hay en marcha, qué resultados se han publicado, qué fármacos están aprobados.
-Esa información existe en bases de datos públicas, pero está repartida, escrita en formatos
-distintos y llena de nombres que se repiten (un mismo fármaco puede aparecer como
-«pembrolizumab», «Keytruda» o «MK-3475»).
+Evidence about melanoma treatments is spread across many public sources: papers in PubMed and
+Europe PMC, trial records in ClinicalTrials.gov, official drug labels, congress abstracts. Each
+source has its own format, and the same drug appears under several names (a single drug can be
+"pembrolizumab", "Keytruda" or "MK-3475"), so finding and cross-checking what is known about a
+treatment takes a lot of manual work.
 
-Este proyecto recoge esos datos, los ordena en un solo catálogo y ofrece un asistente de IA
-que contesta preguntas como:
+This project collects those sources, links them through the drugs they mention, and puts an AI
+assistant on top that can answer questions such as:
 
-> «¿Qué ensayos de fase 3 con encorafenib están activos y qué comparan?»
-> «¿Qué fármaco anti-PD-1 tiene más ensayos de fase 3?»
-> «What are the main mechanisms of resistance to BRAF inhibitors?»
+> "What are the main mechanisms of resistance to BRAF inhibitors?"
+> "What adverse reactions does the Braftovi FDA label describe?"
+> "Which active phase 3 trials include encorafenib, and what do they compare?"
+> "Which anti-PD-1 drug has the most phase 3 trials?"
 
-y responde **citando cada afirmación** con un enlace a su fuente (ensayo, artículo, ficha FDA o
-PDF de congreso). El caso de uso está pensado para **encorafenib + binimetinib** (Braftovi +
-Mektovi, de Pierre Fabre) frente a sus competidores en melanoma.
+Questions about **literature and labels** are answered by reading the relevant passages;
+questions about **counts and lists** (trials by phase, status or sponsor) are answered with an
+exact database query; many questions need both. Either way, **every claim cites its source**
+(paper, trial, FDA label or congress PDF) with a link, and the answer is checked automatically
+against those sources.
 
-> Estado: **funcional de punta a punta** (fases 0-10). Pendientes que necesitan revisión
-> humana: medir el extractor de IA con una muestra anotada y revisar el conjunto de evaluación.
+The starting scope is melanoma and 10 reference drugs covering targeted therapy (BRAF/MEK
+inhibitors) and immunotherapy (anti-PD-1, anti-CTLA-4, anti-LAG-3). The scope lives in a single
+file (`ingestion/landscape.py`), so it can be changed to other conditions or drugs. The same
+data also powers a competitive-landscape view (who is running which trials) for pharma
+analysts.
 
-## Cómo funciona
+> Status: **working end to end** (phases 0-10). Pending items that need human review: measuring
+> the AI extractor against a hand-annotated sample and reviewing the evaluation set.
+
+## How it works
 
 ```
- Fuentes públicas          Catálogo                        Asistente                 Uso
+ Public sources            Catalog                         Assistant                 Usage
 ┌──────────────────┐   ┌──────────────────┐   ┌──────────────────────────────┐   ┌───────────┐
-│ ClinicalTrials   │   │ Postgres         │   │ 1. Planifica: ¿datos exactos │   │ Streamlit │
-│ Europe PMC       │──►│ (tablas+enlaces) │──►│    (SQL) o contenido         │──►│ API REST  │
-│ openFDA          │   │ Qdrant (vectores)│   │    (búsqueda)?               │   │ MCP       │
-│ PDFs congresos   │   │ BM25 (palabras)  │   │ 2. Busca / consulta          │   │ (agentes) │
-└──────────────────┘   └──────────────────┘   │ 3. Responde citando [S1]     │   └───────────┘
-                                              │ 4. Verifica citas y números  │
+│ ClinicalTrials   │   │ Postgres         │   │ 1. Plan: exact data (SQL)    │   │ Streamlit │
+│ Europe PMC       │──►│ (tables + links) │──►│    or content (search)?      │──►│ REST API  │
+│ openFDA          │   │ Qdrant (vectors) │   │ 2. Search / query            │   │ MCP       │
+│ Congress PDFs    │   │ BM25 (keywords)  │   │ 3. Answer citing [S1]        │   │ (agents)  │
+└──────────────────┘   └──────────────────┘   │ 4. Verify citations, numbers │   └───────────┘
                                               └──────────────────────────────┘
 ```
 
-- **Postgres (base relacional):** responde preguntas exactas («¿cuántos ensayos de fase 3
-  están reclutando?») con SQL que el agente escribe y que se valida antes de ejecutarlo.
-- **Qdrant + BM25 (búsqueda híbrida):** encuentra textos por significado *y* por palabras
-  exactas (nombres de fármacos, códigos como MK-3475), y un reranker reordena los mejores.
-- **El agente (LangGraph)** decide qué usar, responde solo con lo encontrado y comprueba que
-  cada cita exista y que cada número aparezca en las fuentes; si no, reescribe la respuesta.
+- **Postgres (relational database):** answers exact questions ("how many phase 3 trials are
+  recruiting?") with SQL that the agent writes and that is validated before it runs.
+- **Qdrant + BM25 (hybrid search):** finds texts by meaning *and* by exact words (drug names,
+  codes such as MK-3475), and a reranker reorders the best candidates.
+- **The agent (LangGraph)** decides what to use, answers only from what it found, and checks
+  that every citation exists and every number appears in the sources; if not, it rewrites the
+  answer.
 
-## Resultados principales
+## Screenshots
 
-| Qué se midió | Resultado | Detalle |
+**Ask: a question answered from the literature.** The answer cites numbered sources on the
+right, each one a paper, trial or label you can open; a badge says whether every citation and
+number was verified.
+
+![Ask: answer with cited sources](docs/images/ask-sources.png)
+
+**Ask: a question answered with an exact database query.** For counts and lists the agent
+writes SQL (validated and read-only); the SQL can be inspected to check the result.
+
+![Ask: answer from the database](docs/images/ask-sql.png)
+
+**Search documents.** The hybrid search on its own, with filters by source type, drug and
+phase, without generating an answer.
+
+![Search documents](docs/images/search.png)
+
+**Drug profile.** Everything known about one drug: its trials by phase and status, articles
+about it, sponsors and FDA label.
+
+![Drug profile](docs/images/drug-profile.png)
+
+**Competitive landscape.** Key figures, active trials per drug, drug × phase map, trials per
+year and the companies running the most trials.
+
+![Competitive landscape](docs/images/landscape.png)
+
+## Main results
+
+| What was measured | Result | Detail |
 |---|---|---|
-| Búsqueda: el documento correcto entre los 5 primeros | **87 %** (102 preguntas) | Fase 5 |
-| Búsqueda: preguntas en español | 74 % (el agente traduce al inglés antes de buscar) | Fase 5 |
-| Respuestas: dato correcto en preguntas con respuesta conocida | 4 de 4 | Fase 10 |
-| Respuestas: afirmaciones respaldadas por sus fuentes (LLM juez) | 84 % (12 preguntas) | Fase 10 |
-| Tiempo de respuesta | ~2 s búsqueda · ~5-20 s respuesta completa | GTX 1650 + Groq gratis |
+| Search: correct document in the top 5 | **87%** (102 questions) | Phase 5 |
+| Search: questions in Spanish | 74% (the agent translates to English before searching) | Phase 5 |
+| Answers: correct figure on questions with a known answer | 4 of 4 | Phase 10 |
+| Answers: claims supported by their sources (LLM judge) | 89% (12 questions) | Phase 10 |
+| Response time | ~2 s search · ~5-20 s full answer | GTX 1650 + free Groq tier |
 
-## Hoja de ruta
+## Roadmap
 
-| Fase | Qué se hace | Estado |
+| Phase | What is done | Status |
 |---|---|---|
-| 0 | Preparar el entorno y explorar cada fuente de datos | ✔ |
-| 1 | Descargar todos los datos de forma fiable | ✔ (ChEMBL opcional, servidor inestable) |
-| 2 | Ordenar los datos en tablas y enlazarlos entre sí | ✔ |
-| 3 | Controles de calidad de los datos | ✔ (falta medir el extractor con anotación manual) |
-| 4 | Indexar los textos en la base vectorial | ✔ MiniLM y MedCPT (bge-m3 opcional) |
-| 5 | Búsqueda híbrida y su evaluación | ✔ |
-| 6 | Respuestas con citas de las fuentes | ✔ |
-| 7 | Agente que elige cómo buscar (LangGraph) | ✔ |
-| 8 | API REST y servidor MCP | ✔ |
-| 9 | Interfaz con Streamlit | ✔ |
-| 10 | Evaluación de las respuestas + PDFs de congresos | ✔ |
+| 0 | Set up the environment and explore each data source | ✔ |
+| 1 | Download all the data reliably | ✔ (ChEMBL optional, unstable server) |
+| 2 | Organize the data into tables and link them together | ✔ |
+| 3 | Data quality checks | ✔ (extractor still to be measured with manual annotation) |
+| 4 | Index the texts in the vector database | ✔ MiniLM and MedCPT (bge-m3 optional) |
+| 5 | Hybrid search and its evaluation | ✔ |
+| 6 | Answers with source citations | ✔ |
+| 7 | Agent that chooses how to search (LangGraph) | ✔ |
+| 8 | REST API and MCP server | ✔ |
+| 9 | Streamlit interface | ✔ |
+| 10 | Answer evaluation + congress PDFs | ✔ |
 
-## Datos de partida
+## Source data
 
-| Fuente | Qué aporta | Registros |
+| Source | What it provides | Records |
 |---|---|---|
-| [ClinicalTrials.gov](https://clinicaltrials.gov) | Ensayos clínicos: fase, estado, patrocinador, tratamientos | 3 782 |
-| [Europe PMC](https://europepmc.org) | Artículos científicos: título, resumen, revista, año | 3 838 (tras quitar duplicados) |
-| [openFDA](https://open.fda.gov) | Fichas técnicas oficiales de fármacos aprobados | 48 |
-| [ChEMBL](https://www.ebi.ac.uk/chembl/) | Nombres alternativos de cada fármaco | Opcional (servidor inestable) |
-| PDFs de congresos | Resultados aún no publicados, cargados a mano | Listo para usar (`data/manual_pdfs/`) |
+| [ClinicalTrials.gov](https://clinicaltrials.gov) | Clinical trials: phase, status, sponsor, treatments | 3,782 |
+| [Europe PMC](https://europepmc.org) | Scientific papers: title, abstract, journal, year | 3,838 (after removing duplicates) |
+| [openFDA](https://open.fda.gov) | Official drug labels of approved drugs | 48 |
+| [ChEMBL](https://www.ebi.ac.uk/chembl/) | Alternative names for each drug | Optional (unstable server) |
+| Congress PDFs | Results not yet published, added by hand | Ready to use (`data/manual_pdfs/`) |
 
-Alcance: melanoma y 10 fármacos (encorafenib, binimetinib, dabrafenib, trametinib,
-vemurafenib, cobimetinib, pembrolizumab, nivolumab, ipilimumab, relatlimab).
-Por qué estas fuentes y no otras: [`docs/decisions/0001-data-sources.md`](docs/decisions/0001-data-sources.md).
+Scope: melanoma and 10 drugs (encorafenib, binimetinib, dabrafenib, trametinib, vemurafenib,
+cobimetinib, pembrolizumab, nivolumab, ipilimumab, relatlimab). Why these sources and not
+others: [`docs/decisions/0001-data-sources.md`](docs/decisions/0001-data-sources.md).
 
-## Cómo ejecutarlo
+## How to run it
 
-Necesitas Docker, [`uv`](https://docs.astral.sh/uv/), Python 3.12, una GPU NVIDIA (recomendada,
-no obligatoria) y una clave gratuita de Groq ([console.groq.com](https://console.groq.com)).
+You need Docker, [`uv`](https://docs.astral.sh/uv/), Python 3.12, an NVIDIA GPU (recommended,
+not required) and a free Groq key ([console.groq.com](https://console.groq.com)).
 
 ```bash
-cp .env.example .env     # rellena las contraseñas de Postgres y GROQ_API_KEY (y GEMINI_API_KEY, opcional)
-make install             # dependencias
-make pipeline            # Docker + descarga + carga en Postgres + calidad + índices (~15 min)
-make api                 # terminal 1: API en http://localhost:8000/docs
-make ui                  # terminal 2: interfaz en http://localhost:8501
+cp .env.example .env     # fill in the Postgres password and GROQ_API_KEY (and GEMINI_API_KEY, optional)
+make install             # dependencies
+make pipeline            # Docker + download + load into Postgres + quality + indexes (~15 min)
+make api                 # terminal 1: API at http://localhost:8000/docs
+make ui                  # terminal 2: interface at http://localhost:8501
 ```
 
-`make help` lista todos los comandos (evaluaciones, PDFs, MCP, tests...). La primera
-pregunta tarda más porque descarga y carga los modelos de Hugging Face.
+`make help` lists all the commands (evaluations, PDFs, MCP, tests...). The first question is
+slower because it downloads and loads the Hugging Face models.
 
-**Usarlo desde Claude (MCP).** El servidor MCP expone 5 herramientas (`search_evidence`,
-`query_trials`, `get_drug_profile`, `get_landscape`, `ask`). En Claude Code:
+**Using it from Claude (MCP).** The MCP server exposes 5 tools (`search_evidence`,
+`query_trials`, `get_drug_profile`, `get_landscape`, `ask`). In Claude Code:
 
 ```bash
-claude mcp add oncoresearchai -- uv --directory /ruta/a/OncoResearchAI run python -m onco_research_ai.mcp_server.server
+claude mcp add oncoresearchai -- uv --directory /path/to/OncoResearchAI run python -m onco_research_ai.mcp_server.server
 ```
 
-En Claude Desktop, en `claude_desktop_config.json`:
+In Claude Desktop, in `claude_desktop_config.json`:
 
 ```json
-{"mcpServers": {"oncoresearchai": {"command": "uv", "args": ["--directory", "/ruta/a/OncoResearchAI",
+{"mcpServers": {"oncoresearchai": {"command": "uv", "args": ["--directory", "/path/to/OncoResearchAI",
   "run", "python", "-m", "onco_research_ai.mcp_server.server"]}}}
 ```
 
-**Añadir PDFs de congresos:** copia los PDF en `data/manual_pdfs/`, opcionalmente un
-`metadata.csv` (`file,title,congress,year,url`), y ejecuta `make pdfs`.
+**Adding congress PDFs:** copy the PDFs into `data/manual_pdfs/`, optionally add a
+`metadata.csv` (`file,title,congress,year,url`), and run `make pdfs`.
 
-## Estructura del proyecto
+## Project structure
 
 ```
 src/onco_research_ai/
-  ingestion/    descarga de cada fuente (un conector por API) y PDFs de congresos
-  processing/   limpieza, validación, diccionario de fármacos, troceado y extractor de IA
-  storage/      tablas de Postgres, carga de datos, consultas fijas y acceso a Qdrant
-  quality/      controles de calidad
-  retrieval/    embeddings, indexación, BM25, búsqueda híbrida y reranker
-  llm/          cliente único del LLM (LiteLLM + Groq, con respaldo y reintentos)
-  agent/        agente LangGraph: SQL seguro, citas y verificación
-  api/          API REST (FastAPI)
-  mcp_server/   servidor MCP
-  evaluation/   conjunto de evaluación y evaluaciones de búsqueda y de respuestas
-app/            interfaz Streamlit
-docs/decisions/ por qué se eligió cada herramienta o fuente
-eval/           conjunto de evaluación e informes generados (eval/reports/)
-tests/          tests automáticos (pytest)
-data/           datos descargados e índices (no se suben a git)
+  ingestion/    download from each source (one connector per API) and congress PDFs
+  processing/   cleaning, validation, drug dictionary, chunking and AI extractor
+  storage/      Postgres tables, data loading, fixed queries and Qdrant access
+  quality/      data quality checks
+  retrieval/    embeddings, indexing, BM25, hybrid search and reranker
+  llm/          single LLM client (LiteLLM: Groq, Gemini or local Ollama, with fallback and retries)
+  agent/        LangGraph agent: safe SQL, citations and verification
+  api/          REST API (FastAPI)
+  mcp_server/   MCP server
+  evaluation/   evaluation set and search and answer evaluations
+app/            Streamlit interface
+docs/decisions/ why each tool or source was chosen
+eval/           evaluation set and generated reports (eval/reports/)
+tests/          automated tests (pytest)
+data/           downloaded data and indexes (not committed to git)
 ```
 
 ---
 
-# Documentación por fases
+# Documentation by phase
 
-## Fase 0 — Entorno y exploración
+## Phase 0 — Environment and exploration
 
-**Objetivo:** preparar el proyecto y entender cómo responde cada API antes de construir nada.
+**Goal:** set up the project and understand how each API responds before building anything.
 
-- Proyecto Python con `uv` (dependencias), `ruff` (estilo) y `pytest` (tests); `.gitignore`
-  deja fuera las contraseñas (`.env`) y los datos (`data/`).
-- `docker-compose.yml` levanta Postgres y Qdrant con un comando.
-- Una prueba rápida por fuente (`scripts/smoke_*.py`): una consulta real para ver cómo
-  vienen los datos.
+- Python project with `uv` (dependencies), `ruff` (style) and `pytest` (tests); `.gitignore`
+  keeps passwords (`.env`) and data (`data/`) out of git.
+- `docker-compose.yml` starts Postgres and Qdrant with a single command.
+- One quick test per source (`scripts/smoke_*.py`): a real query to see what the data looks like.
 
-Lo que se aprendió:
+What was learned:
 
-- Cada API reparte los resultados en páginas de forma distinta: ClinicalTrials.gov con un token
-  (`nextPageToken`), Europe PMC con un cursor (`cursorMark`), openFDA con un desplazamiento
-  (`skip`/`limit`) y ChEMBL con un bloque `page_meta`.
-- Los datos vienen sucios: resultados que no son de melanoma, fases de ensayo vacías o
-  marcadas `NA`, fichas de openFDA sin nombre de fármaco, sinónimos de ChEMBL con ruido.
-- ChEMBL da errores 500 de forma intermitente.
+- Each API paginates differently: ClinicalTrials.gov with a token (`nextPageToken`), Europe PMC
+  with a cursor (`cursorMark`), openFDA with an offset (`skip`/`limit`) and ChEMBL with a
+  `page_meta` block.
+- The data is dirty: results that are not melanoma, empty or `NA` trial phases, openFDA labels
+  without a drug name, noisy ChEMBL synonyms.
+- ChEMBL returns intermittent 500 errors.
 
-## Fase 1 — Descarga de datos
+## Phase 1 — Data download
 
-**Objetivo:** convertir las pruebas en una herramienta que descargue **todos** los datos, siempre
-igual y de forma fiable.
-
-```
-landscape.py   → qué estudiamos: melanoma + 10 fármacos
-conector       → sabe cómo paginar esa API (uno por fuente)
-http.py        → petición con tiempo máximo y reintentos
-raw_store.py   → guarda cada página tal cual + un manifest.json
-```
-
-Decisiones principales:
-
-- **Reintentos con espera creciente**, solo ante fallos pasajeros (error 5xx, límite de
-  peticiones, red caída). Un 404 no se reintenta: repetirlo no lo arregla.
-- **Los datos crudos no se tocan:** cada descarga va a una carpeta nueva en `data/raw/` y nunca
-  se sobrescribe. Si algo sale mal más adelante, se puede volver a empezar desde ahí.
-- **`manifest.json` con estado:** `complete` o `partial`. Una carpeta sin manifiesto es una
-  descarga cortada; una `partial` terminó pero con errores. Solo se usa la última `complete`.
-- **Búsqueda acotada en Europe PMC:** de 69 852 artículos (búsqueda amplia, mucho ruido) a
-  3 883 (fármaco y melanoma en título o resumen, de 2020 en adelante).
-- **Tests con un servidor HTTP falso** para probar paginación y reintentos sin depender de internet.
-
-| Fuente | Registros | Comprobación |
-|---|---|---|
-| ClinicalTrials.gov | 3 782 | Coincide con el total que declara la API, sin duplicados |
-| Europe PMC | 3 883 | Sin duplicados |
-| openFDA | 48 | Coincide con el total de la API |
-| ChEMBL | pendiente | Servidor inestable; si no responde, simplemente no se usa esa fuente |
-
-**Diferencia entre las fases 0 y 1:**
-
-| | Fase 0 (exploración) | Fase 1 (descarga) |
-|---|---|---|
-| Objetivo | Entender cómo responde cada API | Descargar todos los datos |
-| Cantidad | 5-10 registros de muestra | Miles de registros |
-| Paginación | 2 páginas probadas a mano | Hasta el final, automática |
-| Errores | Se rompía | Reintentos y estado de la descarga |
-| Uso | Scripts sueltos | Un comando |
-
-## Fase 2 — Modelo de datos y alineación
-
-**Objetivo:** convertir los JSON crudos, cada uno con su formato, en **un catálogo único** donde
-se pueda cruzar la información (ensayo ↔ fármaco ↔ artículo).
-
-### Qué contiene cada tabla y de dónde sale
-
-Cada tabla es una lista de cosas del mismo tipo. Las «tablas de cruce» son listas que dicen
-«esta cosa va con esta otra».
-
-| Tabla | Origen | Ejemplo de fila |
-|---|---|---|
-| `trials`, `trial_interventions` | ClinicalTrials.gov (lo que declara el patrocinador antes del ensayo) | NCT04657991, fase 3; usa «Encorafenib» |
-| `publications` | Europe PMC (registro bibliográfico: título, resumen, revista) | Un artículo con su PMID y DOI |
-| `labels`, `label_sections` | openFDA (ficha técnica oficial, dividida por secciones) | Ficha de BRAFTOVI → sección «indicaciones» |
-| `drugs`, `drug_synonyms` | **Escritas a mano** en `processing/drugs_seed.py` | encorafenib ← braftovi, lgx818 |
-| `trial_drugs`, `publication_drugs`, `label_drugs`, `trial_publications` | **Calculadas** al cargar, cruzando las anteriores | NCT04657991 ↔ encorafenib |
-| `publication_extractions` | **Generada por IA** a partir del resumen de cada artículo | Un artículo → n = 270, PFS = 14,9 meses |
-
-Cada fila guarda en `source_run` la carpeta de `data/raw/` de la que salió, así siempre se
-puede rastrear su origen.
-
-### Cómo se enlazan las fuentes
-
-Las tres fuentes no comparten ningún identificador, así que el **fármaco hace de punto de
-unión**: cada fuente se conecta a la tabla `drugs` con el dato que sí trae.
+**Goal:** turn the tests into a tool that downloads **all** the data, always the same way and
+reliably.
 
 ```
-Ensayo ──────► Fármaco     comparando sus tratamientos con los nombres conocidos del fármaco
-Artículo ────► Fármaco     buscando esos nombres en el título y el resumen (in_title marca si está en el título)
-Ficha FDA ───► Fármaco     por el nombre de la ficha; si falta, buscando en su texto
-Ensayo ◄───► Artículo      por dos rutas (abajo)
+landscape.py   → what we study: melanoma + 10 drugs
+connector      → knows how to paginate that API (one per source)
+http.py        → request with timeout and retries
+raw_store.py   → saves each page as-is + a manifest.json
 ```
 
-Enlace ensayo ↔ artículo, con dos niveles de fiabilidad (`link_type`):
+Main decisions:
 
-- `trial_reference`: el propio ensayo declara el artículo entre sus referencias (fiable).
-- `abstract_mention`: el artículo cita el código NCT del ensayo en su título o resumen (menos fiable).
+- **Retries with growing wait times**, only for transient failures (5xx error, rate limit,
+  network down). A 404 is not retried: repeating it does not fix it.
+- **Raw data is never modified:** each download goes to a new folder in `data/raw/` and is never
+  overwritten. If something goes wrong later, you can start over from there.
+- **`manifest.json` with a status:** `complete` or `partial`. A folder without a manifest is an
+  interrupted download; a `partial` one finished but with errors. Only the latest `complete`
+  one is used.
+- **Narrowed Europe PMC search:** from 69,852 papers (broad search, lots of noise) to 3,883
+  (drug and melanoma in the title or abstract, from 2020 onward).
+- **Tests with a fake HTTP server** to test pagination and retries without depending on the
+  internet.
 
-Con esto, un solo cruce por `drugs` responde: «dame los ensayos, artículos y fichas de pembrolizumab».
-
-### Limitaciones conocidas
-
-- Solo se enlazan los 10 fármacos del diccionario. Las fichas de otros fármacos (dacarbazina,
-  atezolizumab…) quedan sueltas: 34 de las 48.
-- Un artículo enlazado por el resumen puede mencionar el fármaco solo de pasada; por eso existe `in_title`.
-- 21 de las 48 fichas no traen nombre de fármaco como dato aparte.
-
-### El extractor de IA y las alucinaciones
-
-Algunos datos clave (número de pacientes, supervivencia, línea de tratamiento) solo aparecen
-dentro del texto libre de los resúmenes. Un modelo de lenguaje (`gpt-oss-120b` de Groq, a través
-de LiteLLM) los lee y rellena un formulario fijo. Pero un modelo puede **inventar** un dato, así
-que hay tres defensas:
-
-1. El prompt exige `null` si el dato no aparece.
-2. Pydantic rechaza valores fuera del formulario (por ejemplo, una línea de tratamiento inexistente).
-3. Cada cifra devuelta debe aparecer **literalmente** en el resumen; si no, queda anotada en `unverified_fields`.
-
-Ejemplo real: el estudio CheckMate 067 da tres grupos (n = 314, 316 y 315) y el modelo devolvió
-n = 945, la suma. Es correcto, pero no está escrito, así que quedó marcado como no verificado.
-Esta tabla no se vacía al recargar los datos, porque cada extracción consume cuota de la API.
-
-### Estado
-
-- [x] Modelo de datos y tablas en Postgres
-- [x] Carga validada con Pydantic: 3 782 ensayos, 3 838 artículos (tras quitar duplicados), 48 fichas
-- [x] Diccionario de 10 fármacos (36 nombres) y enlaces con ensayos, artículos y fichas
-- [x] Extractor de IA probado con 47 artículos
-- [ ] Ampliar el diccionario con ChEMBL (opcional)
-
-## Fase 3 — Calidad de datos
-
-**Objetivo:** saber **cuánto fiarse** de los datos cargados. Cada control es una consulta SQL
-con nombre y explicación (`quality/checks.py`), y el informe se guarda en `eval/reports/`.
-
-| Tipo | Pregunta | Ejemplo |
+| Source | Records | Check |
 |---|---|---|
-| Completitud | ¿Cuántos datos faltan? | 1,0 % de ensayos sin fecha de inicio; 43,8 % de fichas sin nombre de marca |
-| Consistencia | ¿Hay datos imposibles? (debe ser 0) | Un ensayo que termina antes de empezar |
-| Duplicados | ¿Hay algo repetido? (debe ser 0) | El mismo artículo como preprint y como versión publicada |
-| Pertinencia | ¿Cuánto es ruido? | 8,8 % de ensayos no nombra «melanoma» (suelen ser genéricos: «Solid Tumors») |
-| Alineación | ¿Qué parte quedó enlazada? | 25,7 % de ensayos con fármaco; 99,5 % de artículos |
+| ClinicalTrials.gov | 3,782 | Matches the total the API reports, no duplicates |
+| Europe PMC | 3,883 | No duplicates |
+| openFDA | 48 | Matches the API total |
+| ChEMBL | pending | Unstable server; if it does not respond, that source is simply not used |
 
-Lo que encontró el primer informe:
+**Difference between phases 0 and 1:**
 
-- **Falsa alarma:** 139 ensayos con tamaño 0. Eran todos `WITHDRAWN` (cancelados antes de
-  reclutar a nadie), donde 0 es correcto. Se corrigió el control, no los datos.
-- **Duplicados reales:** el mismo artículo como preprint y como versión publicada, con DOI
-  distinto. Se detectan por título y año, y se conserva la versión de PubMed (45 eliminados).
-  Una primera versión conservaba registros de Agricola sin DOI; se detectó al revisar a mano
-  qué se eliminaba.
-- Solo el 6,3 % de los ensayos tiene un artículo enlazado: el enlace es fiable pero escaso.
+| | Phase 0 (exploration) | Phase 1 (download) |
+|---|---|---|
+| Goal | Understand how each API responds | Download all the data |
+| Volume | 5-10 sample records | Thousands of records |
+| Pagination | 2 pages tested by hand | Automatic, until the end |
+| Errors | It broke | Retries and download status |
+| Usage | Loose scripts | One command |
 
-**Pendiente:** medir qué porcentaje de las extracciones de la IA son correctas, comparándolas
-con una muestra revisada a mano.
+## Phase 2 — Data model and alignment
 
-## Fase 4 — Indexación vectorial
+**Goal:** convert the raw JSON files, each with its own format, into **a single catalog** where
+information can be cross-referenced (trial ↔ drug ↔ paper).
 
-**Objetivo:** que se pueda buscar por **significado** y no solo por palabras exactas.
+### What each table contains and where it comes from
+
+Each table is a list of things of the same type. The "junction tables" are lists that say "this
+thing goes with that thing".
+
+| Table | Origin | Example row |
+|---|---|---|
+| `trials`, `trial_interventions` | ClinicalTrials.gov (what the sponsor declares before the trial) | NCT04657991, phase 3; uses "Encorafenib" |
+| `publications` | Europe PMC (bibliographic record: title, abstract, journal) | A paper with its PMID and DOI |
+| `labels`, `label_sections` | openFDA (official label, split into sections) | BRAFTOVI label → "indications" section |
+| `drugs`, `drug_synonyms` | **Written by hand** in `processing/drugs_seed.py` | encorafenib ← braftovi, lgx818 |
+| `trial_drugs`, `publication_drugs`, `label_drugs`, `trial_publications` | **Computed** at load time by cross-referencing the above | NCT04657991 ↔ encorafenib |
+| `publication_extractions` | **AI-generated** from each paper's abstract | A paper → n = 270, PFS = 14.9 months |
+
+Each row stores in `source_run` the `data/raw/` folder it came from, so its origin can always
+be traced.
+
+### How the sources are linked
+
+The three sources share no identifier, so the **drug acts as the join point**: each source is
+connected to the `drugs` table through the data it does have.
+
+```
+Trial ───────► Drug      comparing its treatments with the drug's known names
+Paper ───────► Drug      searching for those names in the title and abstract (in_title marks whether it is in the title)
+FDA label ───► Drug      by the label's drug name; if missing, searching its text
+Trial ◄────► Paper       through two routes (below)
+```
+
+Trial ↔ paper link, with two reliability levels (`link_type`):
+
+- `trial_reference`: the trial itself lists the paper among its references (reliable).
+- `abstract_mention`: the paper cites the trial's NCT code in its title or abstract (less reliable).
+
+With this, a single join through `drugs` answers: "give me the trials, papers and labels of
+pembrolizumab".
+
+### Known limitations
+
+- Only the 10 drugs in the dictionary are linked. Labels for other drugs (dacarbazine,
+  atezolizumab...) stay unlinked: 34 of the 48.
+- A paper linked through its abstract may mention the drug only in passing; that is why
+  `in_title` exists.
+- 21 of the 48 labels have no drug name as a separate field.
+
+### The AI extractor and hallucinations
+
+Some key data (number of patients, survival, treatment line) only appears inside the free text
+of abstracts. A language model (Groq's `gpt-oss-120b`, through LiteLLM) reads them and fills in
+a fixed form. But a model can **make up** a value, so there are three defenses:
+
+1. The prompt requires `null` if the value does not appear.
+2. Pydantic rejects values outside the form (for example, a non-existent treatment line).
+3. Every figure returned must appear **literally** in the abstract; otherwise it is recorded in
+   `unverified_fields`.
+
+Real example: the CheckMate 067 study reports three groups (n = 314, 316 and 315) and the model
+returned n = 945, their sum. That is correct, but it is not written anywhere, so it was flagged
+as unverified. This table is not emptied when the data is reloaded, because each extraction
+consumes API quota.
+
+### Status
+
+- [x] Data model and tables in Postgres
+- [x] Load validated with Pydantic: 3,782 trials, 3,838 papers (after removing duplicates), 48 labels
+- [x] Dictionary of 10 drugs (36 names) and links to trials, papers and labels
+- [x] AI extractor tested on 47 papers
+- [ ] Extend the dictionary with ChEMBL (optional)
+
+## Phase 3 — Data quality
+
+**Goal:** know **how much to trust** the loaded data. Each check is a named SQL query with an
+explanation (`quality/checks.py`), and the report is saved in `eval/reports/`.
+
+| Type | Question | Example |
+|---|---|---|
+| Completeness | How much data is missing? | 1.0% of trials without a start date; 43.8% of labels without a brand name |
+| Consistency | Is there impossible data? (should be 0) | A trial that ends before it starts |
+| Duplicates | Is anything repeated? (should be 0) | The same paper as a preprint and as the published version |
+| Relevance | How much is noise? | 8.8% of trials do not name "melanoma" (usually generic ones: "Solid Tumors") |
+| Alignment | How much ended up linked? | 25.7% of trials with a drug; 99.5% of papers |
+
+What the first report found:
+
+- **False alarm:** 139 trials with size 0. They were all `WITHDRAWN` (cancelled before
+  enrolling anyone), where 0 is correct. The check was fixed, not the data.
+- **Real duplicates:** the same paper as a preprint and as the published version, with a
+  different DOI. They are detected by title and year, and the PubMed version is kept (45
+  removed). A first version kept Agricola records without a DOI; this was caught by manually
+  reviewing what was being removed.
+- Only 6.3% of trials have a linked paper: the link is reliable but sparse.
+
+**Pending:** measure what percentage of the AI extractions are correct, by comparing them with
+a hand-reviewed sample.
+
+## Phase 4 — Vector indexing
+
+**Goal:** make it possible to search by **meaning** and not just by exact words.
 
 ```
 Postgres ─► chunking.py ─► embedder.py ─► vectorstore.py (Qdrant)
- filas       trozos de       vectores        colección con vectores
-            ≤180 tokens     de 384 números  + metadatos para filtrar y citar
+  rows       pieces of       vectors        collection with vectors
+            ≤180 tokens     of 384 numbers  + metadata to filter and cite
 ```
 
-### Conceptos
+### Concepts
 
-- **Embedding:** un texto convertido en una lista de números (384 con MiniLM, 1 024 con
-  bge-m3). Los textos de significado parecido quedan cerca. Con MiniLM, dos frases sobre el
-  mismo tratamiento escritas con palabras distintas puntúan 0,68; una frase y una receta de
-  cocina, −0,06.
-- **Similitud coseno:** mide el ángulo entre dos vectores (1 = misma dirección, 0 = sin relación).
-- **Token:** el modelo no lee palabras sino trozos de palabra. «encorafenib» se rompe en 5
-  trozos (`en ##cor ##af ##eni ##b`): un modelo general apenas conoce los nombres de fármacos.
-- **Límite de tokens:** MiniLM lee como máximo 256 tokens y descarta el resto sin avisar. El
-  86,7 % de los abstracts lo superan (mediana: 402), así que se pierde casi siempre la segunda
-  mitad, donde están los resultados.
-- **Chunking:** por eso los textos se trocean (≤180 tokens, cortando entre frases y con una
-  frase de solapamiento). Además, un vector por trozo es más preciso que uno por abstract
-  completo, que mezcla varias ideas.
-- **Qdrant:** base de datos de vectores. Cada trozo es un *punto* (vector + *payload* con
-  metadatos) dentro de una *colección*. El payload permite combinar significado y filtros
-  exactos: «los trozos más parecidos a mi pregunta, pero solo ensayos de fase 3 con encorafenib».
-- **HNSW:** índice que evita comparar con todos los vectores. Con 25 000 trozos Qdrant aún
-  compara con todos (es instantáneo); el índice solo importa con millones.
+- **Embedding:** a text converted into a list of numbers (384 with MiniLM, 1,024 with bge-m3).
+  Texts with similar meaning end up close together. With MiniLM, two sentences about the same
+  treatment written with different words score 0.68; a sentence and a cooking recipe, −0.06.
+- **Cosine similarity:** measures the angle between two vectors (1 = same direction, 0 = unrelated).
+- **Token:** the model does not read words but word pieces. "encorafenib" breaks into 5 pieces
+  (`en ##cor ##af ##eni ##b`): a general model barely knows drug names.
+- **Token limit:** MiniLM reads at most 256 tokens and silently discards the rest. 86.7% of
+  abstracts exceed it (median: 402), so the second half, where the results are, is almost
+  always lost.
+- **Chunking:** that is why texts are split (≤180 tokens, cutting between sentences with one
+  sentence of overlap). Also, one vector per chunk is more precise than one per full abstract,
+  which mixes several ideas.
+- **Qdrant:** vector database. Each chunk is a *point* (vector + *payload* with metadata)
+  inside a *collection*. The payload makes it possible to combine meaning and exact filters:
+  "the chunks most similar to my question, but only phase 3 trials with encorafenib".
+- **HNSW:** index that avoids comparing against every vector. With 25,000 chunks Qdrant still
+  compares against all of them (it is instant); the index only matters with millions.
 
-**¿Por qué Qdrant y no Chroma, FAISS o pgvector?** Con este volumen cualquiera valdría. Se
-eligió Qdrant porque funciona como un servidor independiente, filtra por metadatos y admite
-búsqueda híbrida (palabras exactas + significado), que es como se hace en producción. Chroma es
-más sencillo y bueno para prototipos; FAISS es solo una librería de índices; pgvector guarda los
-vectores dentro de Postgres.
+**Why Qdrant and not Chroma, FAISS or pgvector?** At this volume any of them would work.
+Qdrant was chosen because it runs as an independent server, filters by metadata and supports
+hybrid search (exact words + meaning), which is how it is done in production. Chroma is simpler
+and good for prototypes; FAISS is only an index library; pgvector stores the vectors inside
+Postgres.
 
-### Qué se indexa
+### What is indexed
 
-| Origen | Cómo se trocea | Trozos | Metadatos (payload) |
+| Origin | How it is split | Chunks | Metadata (payload) |
 |---|---|---|---|
-| Ensayos | título + resumen | 5 542 | fase, estado, patrocinador, año, fármacos, enlace |
-| Artículos | abstract en trozos, con el título delante de cada uno | 12 404 | año, revista, fármacos, enlace |
-| Fichas FDA | cada sección en trozos con el nombre del fármaco delante | 7 130 | sección, fármacos, enlace |
-| **Total** | | **25 076** | |
+| Trials | title + summary | 5,542 | phase, status, sponsor, year, drugs, link |
+| Papers | abstract in chunks, with the title in front of each | 12,404 | year, journal, drugs, link |
+| FDA labels | each section in chunks with the drug name in front | 7,130 | section, drugs, link |
+| **Total** | | **25,076** | |
 
-El identificador de cada trozo se calcula a partir del documento y su posición, así que
-reindexar sobrescribe en vez de duplicar. Indexar con MiniLM en una GTX 1650 tarda unos 6 minutos.
+Each chunk's identifier is computed from the document and its position, so reindexing
+overwrites instead of duplicating. Indexing with MiniLM on a GTX 1650 takes about 6 minutes.
 
-### Modelos indexados
+### Indexed models
 
-Los dos modelos usan exactamente los mismos 25 076 trozos (se trocea con un tokenizador común),
-para poder compararlos con justicia en la fase 5.
+Both models use exactly the same 25,076 chunks (split with a shared tokenizer), so they can be
+compared fairly in phase 5.
 
-| Modelo | Tipo | Vector | Tiempo de indexación (GTX 1650) |
+| Model | Type | Vector | Indexing time (GTX 1650) |
 |---|---|---|---|
-| MiniLM (`all-MiniLM-L6-v2`) | General, 22 M parámetros | 384 | 6 min |
-| MedCPT (NCBI) | Biomédico, entrenado con búsquedas de PubMed; usa un modelo para los textos y otro para las preguntas | 768 | 34,5 min |
-| bge-m3 | General multilingüe, 570 M parámetros | 1 024 | Pendiente (~100 min estimados) |
+| MiniLM (`all-MiniLM-L6-v2`) | General, 22 M parameters | 384 | 6 min |
+| MedCPT (NCBI) | Biomedical, trained on PubMed searches; uses one model for texts and another for questions | 768 | 34.5 min |
+| bge-m3 | General multilingual, 570 M parameters | 1,024 | Pending (~100 min estimated) |
 
-### Ejemplos de búsqueda
+### Search examples
 
-| Pregunta | Resultado |
+| Question | Result |
 |---|---|
-| «how do melanoma cells become resistant to BRAF inhibitors» | Tres revisiones sobre resistencia a BRAF, aunque ninguna usa esas palabras exactas |
-| «recommended dose of encorafenib» (sin filtro) | Salió la ficha de MEKTOVI, que solo cita a encorafenib de pasada |
-| La misma, con filtro `--drug encorafenib` | Salen las secciones de dosis de la ficha de BRAFTOVI |
-| «MK-3475» | Encuentra los ensayos que escriben ese código, pero no los de pembrolizumab que usan el nombre; y los resultados 3.º y 4.º ya no tienen relación |
+| "how do melanoma cells become resistant to BRAF inhibitors" | Three reviews on BRAF resistance, although none uses those exact words |
+| "recommended dose of encorafenib" (no filter) | The MEKTOVI label came out, which only mentions encorafenib in passing |
+| The same one, with the `--drug encorafenib` filter | The dosing sections of the BRAFTOVI label come out |
+| "MK-3475" | Finds the trials that write that code, but not the pembrolizumab trials that use the name; and the 3rd and 4th results are already unrelated |
 
-El último caso es la limitación esperada de la búsqueda por significado con nombres propios, y
-es la razón de la búsqueda híbrida (BM25 + vectores) de la fase 5.
+The last case is the expected limitation of meaning-based search with proper names, and it is
+the reason for the hybrid search (BM25 + vectors) of phase 5.
 
-## Fase 5 — Búsqueda híbrida y su evaluación
+## Phase 5 — Hybrid search and its evaluation
 
-**Objetivo:** encontrar el documento correcto, y **medirlo** en vez de fiarse de ejemplos sueltos.
+**Goal:** find the right document, and **measure it** instead of trusting isolated examples.
 
 ```
-pregunta ─┬─► Qdrant (significado)  50 candidatos ─┐
-          └─► BM25 (palabras exactas) 50 candidatos ─┴─► RRF ─► reranker (20 mejores) ─► top k
+question ─┬─► Qdrant (meaning)      50 candidates ─┐
+          └─► BM25 (exact words)    50 candidates ─┴─► RRF ─► reranker (top 20) ─► top k
 ```
 
-- **BM25:** puntúa por palabras compartidas, dando más peso a las raras («relatlimab»,
-  «mk-3475»). Gana justo donde fallan los embeddings: nombres propios y códigos.
-- **RRF (Reciprocal Rank Fusion):** une las dos listas sumando 1/(60 + posición). Usa
-  posiciones y no puntuaciones, porque un coseno y una puntuación BM25 no son comparables.
-- **Reranker (cross-encoder MedCPT):** lee pregunta y texto *juntos*, así que es más preciso
-  que comparar dos vectores calculados por separado, pero lento (~90 ms por texto en una GTX
-  1650). Por eso solo reordena los 20 mejores: reordenar 100 tardaba 9 s y 20 tarda ~2 s.
+- **BM25:** scores by shared words, giving more weight to rare ones ("relatlimab",
+  "mk-3475"). It wins exactly where embeddings fail: proper names and codes.
+- **RRF (Reciprocal Rank Fusion):** merges the two lists by adding 1/(60 + position). It uses
+  positions and not scores, because a cosine and a BM25 score are not comparable.
+- **Reranker (MedCPT cross-encoder):** reads the question and the text *together*, so it is more
+  precise than comparing two separately computed vectors, but slow (~90 ms per text on a GTX
+  1650). That is why it only reorders the top 20: reordering 100 took 9 s and 20 takes ~2 s.
 
-**Conjunto de evaluación** (`eval/golden_set.jsonl`, 102 preguntas): se eligieron 42 trozos
-al azar (ensayos, artículos y fichas) y un LLM escribió una pregunta que cada uno responde; ese
-documento es la respuesta correcta. Variantes: la misma pregunta **en español** (42) y con el
-**código** del fármaco en vez del nombre (18, p. ej. MK-3475 por pembrolizumab).
+**Evaluation set** (`eval/golden_set.jsonl`, 102 questions): 42 chunks were picked at random
+(trials, papers and labels) and an LLM wrote a question that each one answers; that document is
+the correct answer. Variants: the same question **in Spanish** (42) and with the drug **code**
+instead of the name (18, e.g. MK-3475 for pembrolizumab).
 
-| Configuración | Recall@1 | Recall@5 | MRR@10 | s/pregunta |
+| Configuration | Recall@1 | Recall@5 | MRR@10 | s/question |
 |---|---|---|---|---|
-| BM25 (palabras) | 0,54 | 0,72 | 0,63 | 0,1 |
-| Denso MiniLM | 0,62 | 0,81 | 0,70 | 0,02 |
-| Denso MedCPT | 0,27 | 0,50 | 0,37 | 0,03 |
-| Híbrido MiniLM | 0,65 | 0,84 | 0,73 | 0,1 |
-| Híbrido MedCPT + reranker | 0,72 | 0,81 | 0,76 | 2,2 |
-| **Híbrido MiniLM + reranker** (elegido) | **0,75** | **0,87** | **0,80** | 2,1 |
+| BM25 (words) | 0.54 | 0.72 | 0.63 | 0.1 |
+| Dense MiniLM | 0.62 | 0.81 | 0.70 | 0.02 |
+| Dense MedCPT | 0.27 | 0.50 | 0.37 | 0.03 |
+| Hybrid MiniLM | 0.65 | 0.84 | 0.73 | 0.1 |
+| Hybrid MedCPT + reranker | 0.72 | 0.81 | 0.76 | 2.2 |
+| **Hybrid MiniLM + reranker** (chosen) | **0.75** | **0.87** | **0.80** | 2.1 |
 
-*Recall@5: % de preguntas cuyo documento correcto sale entre los 5 primeros. MRR: premia que
-salga arriba (1 si es el 1.º, 0,5 si es el 2.º...).* Informe completo en `eval/reports/`.
+*Recall@5: % of questions whose correct document appears in the top 5. MRR: rewards appearing
+near the top (1 if it is 1st, 0.5 if it is 2nd...).* Full report in `eval/reports/`.
 
-Lo que enseña:
+What it shows:
 
-- **El híbrido gana** a cada método por separado, y el reranker suma otros 10 puntos de Recall@1.
-- **MedCPT, el modelo biomédico, buscó peor que el general.** Se entrenó con búsquedas cortas
-  de PubMed y artículos; aquí las preguntas son frases largas y un tercio de los documentos son
-  ensayos y fichas. Como *reranker*, en cambio, sí aporta. Se descartó como buscador por datos,
-  no por intuición.
-- **Español:** 74 % frente a 98 % en inglés, porque los modelos son de inglés. Por eso el agente
-  traduce la pregunta antes de buscar.
-- **Limitaciones:** las preguntas son sintéticas y comparten palabras con su documento (BM25
-  acierta el 98 % de las parafraseadas), y solo hay una respuesta correcta por pregunta (otro
-  documento igual de válido cuenta como fallo). Conviene revisarlas a mano.
+- **Hybrid beats** each method on its own, and the reranker adds another 10 points of Recall@1.
+- **MedCPT, the biomedical model, searched worse than the general one.** It was trained on
+  short PubMed queries and papers; here the questions are long sentences and a third of the
+  documents are trials and labels. As a *reranker*, however, it does help. It was discarded as
+  a retriever based on data, not on intuition.
+- **Spanish:** 74% versus 98% in English, because the models are English-centric. That is why
+  the agent translates the question before searching.
+- **Limitations:** the questions are synthetic and share words with their document (BM25 gets
+  98% of the paraphrased ones right), and there is only one correct answer per question
+  (another equally valid document counts as a miss). They should be reviewed by hand.
 
-## Fases 6 y 7 — Agente que responde citando
+## Phases 6 and 7 — Agent that answers with citations
 
-**Objetivo:** responder en lenguaje natural sin inventar, y que cada afirmación se pueda comprobar.
+**Goal:** answer in natural language without making things up, so that every claim can be checked.
 
 ```
-plan ──► SQL? ──► búsqueda? ──► redactar ──► verificar ──► respuesta
-                                    ▲             │
-                                    └─────────────┘ (reintento si algo no cuadra)
+plan ──► SQL? ──► search? ──► write ──► verify ──► answer
+                                ▲          │
+                                └──────────┘ (retry if something does not add up)
 ```
 
-1. **Planificar:** el LLM clasifica la pregunta: datos exactos → SQL; contenido → búsqueda;
-   ambas → las dos. También traduce la pregunta al inglés y extrae filtros (fármaco, fase,
-   tipo de fuente), traduciendo marcas y códigos a su nombre genérico (Keytruda → pembrolizumab).
-2. **SQL seguro:** el LLM escribe la consulta y antes de ejecutarla `sqlglot` comprueba que sea
-   una sola sentencia, solo `SELECT` y solo sobre tablas conocidas. Se ejecuta en una transacción
-   de **solo lectura**, con 5 s de tiempo máximo y 50 filas como mucho. Si falla, el error se le
-   devuelve al LLM para que lo corrija; si devuelve 0 filas, se le pide que revise la lógica.
-3. **Redactar:** el LLM solo ve las fuentes numeradas `[S1]...[Sn]` y el resultado `[SQL]`, y
-   debe citar cada afirmación.
-4. **Verificar:** se comprueba que no cite fuentes inexistentes, que las frases tengan cita y que
-   **cada número de la respuesta aparezca en las fuentes**. Si algo falla, reescribe la respuesta
-   indicándole qué número o frase no tiene respaldo.
+1. **Plan:** the LLM classifies the question: exact data → SQL; content → search; both → both.
+   It also translates the question into English and extracts filters (drug, phase, source type),
+   translating brand names and codes to the generic name (Keytruda → pembrolizumab).
+2. **Safe SQL:** the LLM writes the query and, before running it, `sqlglot` checks that it is a
+   single statement, `SELECT` only, and only over known tables. It runs in a **read-only**
+   transaction, with a 5 s timeout and at most 50 rows. If it fails, the error is returned to
+   the LLM to fix it; if it returns 0 rows, the LLM is asked to review the logic.
+3. **Write:** the LLM only sees the numbered sources `[S1]...[Sn]` and the `[SQL]` result, and
+   must cite every claim.
+4. **Verify:** it checks that no non-existent source is cited, that sentences carry a citation,
+   and that **every number in the answer appears in the sources**. If something fails, the
+   answer is rewritten, telling the model which number or sentence has no support.
 
-Tres fallos reales que motivaron estas defensas:
+Three real failures that motivated these defenses:
 
-- **Totales inventados:** el agente dijo «13 ensayos» de fase 3 con inhibidores de BRAF; eran 18
-  (y las filas sumaban 20, porque un ensayo puede usar dos fármacos). Pedírselo en el prompt no
-  bastó; la verificación de números sí lo corrige.
-- **Un «no existe» falso:** un SQL mal planteado devolvió 0 ensayos BRAF + MEK reclutando y el
-  agente lo afirmó con seguridad; había 11. Ahora un resultado vacío se revisa antes de aceptarlo.
-- **Citas con otros corchetes:** el modelo a veces escribe `【S1】`; se normalizan para verificarlas.
+- **Made-up totals:** the agent said "13 trials" of phase 3 with BRAF inhibitors; there were 18
+  (and the rows added up to 20, because a trial can use two drugs). Asking for it in the prompt
+  was not enough; the number verification does fix it.
+- **A false "does not exist":** a badly formed SQL query returned 0 recruiting BRAF + MEK trials
+  and the agent stated it confidently; there were 11. Now an empty result is reviewed before
+  being accepted.
+- **Citations with other brackets:** the model sometimes writes `【S1】`; they are normalized so
+  they can be verified.
 
-## Fase 8 — API REST y servidor MCP
+## Phase 8 — REST API and MCP server
 
-**API REST (FastAPI)**, con documentación interactiva en `http://localhost:8000/docs`:
+**REST API (FastAPI)**, with interactive documentation at `http://localhost:8000/docs`:
 
-| Endpoint | Qué hace |
+| Endpoint | What it does |
 |---|---|
-| `GET /health` | Estado de Postgres y Qdrant |
-| `POST /search` | Búsqueda híbrida con filtros (fuente, fármaco, fase) |
-| `POST /ask` | Pregunta al agente: respuesta, fuentes citadas, SQL usado y verificación |
-| `GET /trials` | Ensayos filtrados por fármaco, mecanismo, fase, estado, patrocinador |
-| `GET /drugs`, `GET /drugs/{nombre}` | Perfil de un fármaco (acepta marca o código: `/drugs/Keytruda`) |
-| `GET /landscape` | Panorama competitivo: ensayos por fármaco, fase, año y patrocinador |
+| `GET /health` | Status of Postgres and Qdrant |
+| `POST /search` | Hybrid search with filters (source, drug, phase) |
+| `POST /ask` | Ask the agent: answer, cited sources, SQL used and verification |
+| `GET /models` | Selectable LLMs, whether each is available now, and how much each has been used |
+| `GET /trials` | Trials filtered by drug, mechanism, phase, status, sponsor |
+| `GET /drugs`, `GET /drugs/{name}` | Drug profile (accepts a brand or code: `/drugs/Keytruda`) |
+| `GET /landscape` | Competitive landscape: trials by drug, phase, year and sponsor |
 
-Las consultas fijas usan parámetros (`:drug`) en vez de pegar texto en el SQL, para evitar la
-inyección SQL.
+The fixed queries use parameters (`:drug`) instead of pasting text into the SQL, to prevent SQL
+injection.
 
-**Servidor MCP:** las mismas capacidades como herramientas para agentes de IA. La diferencia:
-una API REST la usa un programa que ya sabe qué llamar; MCP permite que un agente (Claude,
-por ejemplo) **descubra** las herramientas y decida cuándo usarlas. Probado con un cliente MCP
-real por stdio.
+**MCP server:** the same capabilities as tools for AI agents. The difference: a REST API is used
+by a program that already knows what to call; MCP lets an agent (Claude, for example)
+**discover** the tools and decide when to use them. Tested with a real MCP client over stdio.
 
-## Fase 9 — Interfaz (Streamlit)
+## Phase 9 — Interface (Streamlit)
 
-La interfaz, **íntegramente en inglés** (textos, gráficos, estados y fases; el asistente responde en el idioma de la pregunta), consume la API (no toca la base de datos) y está pensada para alguien que la abre
-por primera vez: cada pestaña explica qué hace y qué esperar.
+The interface is **entirely in English** (texts, charts, statuses and phases; the assistant
+answers in the language of the question). It consumes the API (it never touches the database)
+and is designed for someone opening it for the first time: each tab explains what it does and
+what to expect.
 
-- **Ask:** antes de la primera pregunta muestra cuánto tarda (3-20 s), cómo leer las
-  citas ([S1] documento, [SQL] recuento exacto) y ejemplos agrupados por tipo de pregunta. Cada
-  respuesta muestra qué hizo el agente (base de datos, búsqueda o ambas), una etiqueta de
-  verificación (citas y cifras respaldadas, o qué revisar), el tiempo de cada paso, el SQL usado
-  y las fuentes citadas al lado, con su enlace.
-- **Competitive landscape:** cifras clave, una lectura rápida en frases, ensayos activos por
-  fármaco, mapa fármaco × fase, ensayos por año y mecanismo, y laboratorios (Pierre Fabre
-  resaltado). Paleta validada para daltonismo, etiquetas visibles y vista en tabla.
-- **Drug profile:** fases, estados, patrocinadores, artículos más citados y fichas FDA.
-- **Search documents:** búsqueda híbrida con filtros, sin redactar respuesta.
+- **Ask:** before the first question it shows how long it takes (3-20 s), how to read the
+  citations ([S1] document, [SQL] exact count) and examples grouped by question type. Each
+  answer shows what the agent did (database, search or both), a verification label (citations
+  and figures supported, or what to check), the time of each step, the SQL used and the cited
+  sources alongside, with their links.
+- **Competitive landscape:** key figures, a quick read in sentences, active trials per drug, a
+  drug × phase map, trials per year and mechanism, and sponsors. Colorblind-validated palette,
+  visible labels and a table view.
+- **Drug profile:** phases, statuses, sponsors, most cited papers and FDA labels.
+- **Search documents:** hybrid search with filters, without writing an answer.
 
-Identidad visual: el sistema parte de la skill de diseño `design-taste-frontend`
-([Taste Skill](https://github.com/Leonxlnx/taste-skill)): tinta azul marino, Host Grotesk para
-leer y JetBrains Mono para los códigos, texto a 16 px. Encima, un **código de colores con
-significado**: un color por tipo de fármaco (BRAF azul, MEK naranja, anti-PD-1 verde, anti-CTLA-4
-ámbar, anti-LAG-3 rosa), igual en los chips de la barra lateral y en los gráficos, y un color por
-tipo de documento en las tarjetas de fuentes (ensayo azul, artículo verde, ficha FDA naranja,
-congreso rosa). Barra lateral oscura, contenido claro; el naranja solo en bordes y marcas porque
-como texto no se lee (2,3:1). Todas las combinaciones de letra y fondo superan 4,5:1. La app usa
-siempre el tema claro, aunque el sistema esté en modo oscuro (`.streamlit/config.toml`).
+Visual identity: the system starts from the `design-taste-frontend` design skill
+([Taste Skill](https://github.com/Leonxlnx/taste-skill)): navy ink, Host Grotesk for reading and
+JetBrains Mono for codes, 16 px text. On top of that, a **meaningful color code**: one color per
+drug class (BRAF blue, MEK orange, anti-PD-1 green, anti-CTLA-4 amber, anti-LAG-3 pink), the
+same in the sidebar chips and in the charts, and one color per document type in the source
+cards (trial blue, paper green, FDA label orange, congress pink). Dark sidebar, light content;
+orange only on borders and marks because as text it is unreadable (2.3:1). Every text and
+background combination exceeds 4.5:1. The app always uses the light theme, even if the system
+is in dark mode (`.streamlit/config.toml`).
 
-Errores encontrados al revisar la interfaz con capturas: la cifra principal sumaba ensayos por
-fármaco (1 422) en lugar de contar ensayos distintos (972), y una cita escrita como `[S1, S2]`
-no se reconocía; ambos corregidos.
+Errors found while reviewing the interface with screenshots: the headline figure added up
+trials per drug (1,422) instead of counting distinct trials (972), and a citation written as
+`[S1, S2]` was not recognized; both were fixed.
 
-### Elegir el modelo de lenguaje
+### Choosing the language model
 
-La barra lateral de la interfaz permite elegir, para cada pregunta, uno de tres modelos
-(se definen en una tabla, `llm/client.py`; añadir o cambiar uno es editar esa tabla):
+The interface sidebar lets you choose, for each question, one of three models (they are defined
+in a table, `llm/client.py`; adding or changing one means editing that table):
 
-| Modelo | Cuota gratuita | Cuándo usarlo |
+| Model | Free quota | When to use it |
 |---|---|---|
-| Groq · gpt-oss-120b | 8 000 tokens/min, 200 000 tokens/día, 1 000 peticiones/día | Por defecto: el mejor y el más rápido |
-| Google · Gemini 3.1 Flash-Lite | Se ve en Google AI Studio | Respaldo en la nube cuando Groq se agota |
-| Local · Ollama (Qwen3 4B) | Sin límite; nada sale del equipo | Privacidad o sin cuota. Modelo pequeño: escribe mal el SQL y responde peor |
+| Groq · gpt-oss-120b | 8,000 tokens/min, 200,000 tokens/day, 1,000 requests/day | Default: the best and the fastest |
+| Google · Gemini 3.1 Flash-Lite | Visible in Google AI Studio | Cloud fallback when Groq runs out |
+| Local · Ollama (Qwen3 4B) | No limit; nothing leaves the computer | Privacy or no quota. Small model: writes SQL worse and answers worse |
 
-Si el modelo elegido se queda sin cuota, contesta el siguiente disponible y la respuesta lo
-dice (etiqueta naranja), porque un modelo de respaldo más pequeño puede responder peor.
+If the chosen model runs out of quota, the next available one answers and the response says so
+(orange label), because a smaller fallback model may answer worse.
 
-**Cuánta cuota queda: qué se sabe de cada proveedor.** No es lo mismo en los tres, y la interfaz
-solo muestra lo que de verdad se puede saber:
+**How much quota is left: what is known about each provider.** It is not the same for all
+three, and the interface only shows what can actually be known:
 
-| | Qué se muestra |
+| | What is shown |
 |---|---|
-| Todos | Peticiones y tokens gastados hoy **por esta aplicación** (`data/llm_usage.json`) |
-| Groq | Además, lo que informa en cada respuesta: peticiones que quedan hoy y tokens que quedan este minuto. El límite diario de tokens solo aparece tras un error por agotarlo |
-| Gemini | La API no informa de la cuota restante; solo se ve en Google AI Studio. Con `GEMINI_DAILY_REQUEST_LIMIT` en el `.env` se estima lo que queda a partir de lo contado aquí (no incluye lo que se gaste con la misma clave fuera de la app) |
-| Ollama | Sin límite |
+| All | Requests and tokens spent today **by this application** (`data/llm_usage.json`) |
+| Groq | Also, what it reports with each response: requests left today and tokens left this minute. The daily token limit only appears after an error from exhausting it |
+| Gemini | The API does not report the remaining quota; it is only visible in Google AI Studio. With `GEMINI_DAILY_REQUEST_LIMIT` in `.env`, the remainder is estimated from what is counted here (it does not include what is spent with the same key outside the app) |
+| Ollama | No limit |
 
-Para usar el modelo local hace falta Ollama y descargar el modelo una vez:
-`ollama pull qwen3:4b-instruct-2507-q4_K_M` (2,5 GB). Mientras está cargado ocupa unos 2,6 GB de
-RAM y ralentiza el resto del equipo.
+To use the local model you need Ollama and to download the model once:
+`ollama pull qwen3:4b-instruct-2507-q4_K_M` (2.5 GB). While loaded it takes about 2.6 GB of RAM
+and slows down the rest of the machine.
 
-## Fase 10 — Evaluación de las respuestas y PDFs de congresos
+## Phase 10 — Answer evaluation and congress PDFs
 
-**Evaluación del agente** (`make eval-generation`): 12 preguntas escritas a mano (4 de datos,
-6 de contenido, 2 mixtas). Para las de datos, la respuesta correcta se calculó con SQL escrito
-a mano. La fidelidad la puntúa un LLM juez, que descompone la respuesta en afirmaciones y
-comprueba cuáles están en las fuentes.
+**Agent evaluation** (`make eval-generation`): 12 hand-written questions (4 data, 6 content, 2
+mixed). For the data questions, the correct answer was computed with hand-written SQL.
+Faithfulness is scored by an LLM judge, which breaks the answer into claims and checks which
+ones are in the sources.
 
-| Métrica | Resultado |
+| Metric | Result |
 |---|---|
-| Ruta correcta (SQL / búsqueda / ambas) | 12 de 12 |
-| Respuestas con al menos una cita | 12 de 12 |
-| Sin citas a fuentes inexistentes | 12 de 12 |
-| Sin números sin respaldo | 11 de 12 (el fallo era del verificador, ver abajo) |
-| Dato correcto en preguntas con respuesta conocida | 4 de 4 |
-| Fidelidad media (LLM juez) | 84 % |
-| Pertinencia media (LLM juez, 1-5) | 4,7 |
-| Tiempo medio por respuesta | 3,6 s |
+| Correct route (SQL / search / both) | 12 of 12 |
+| Answers with at least one citation | 12 of 12 |
+| No citations to non-existent sources | 12 of 12 |
+| No unsupported numbers | 12 of 12 |
+| Correct figure on questions with a known answer | 4 of 4 |
+| Mean faithfulness (LLM judge) | 89% |
+| Mean relevance (LLM judge, 1-5) | 4.7 |
+| Mean time per answer | 10 s (includes forced waits for the free-tier rate limit; ~3.6 s in an earlier run without them) |
 
-Las tres respuestas con fidelidad baja, revisadas a mano:
+The answers with low faithfulness, reviewed by hand:
 
-- **COLUMBUS (0,33): fallo de búsqueda.** Recuperó COLUMBUS-AD (otro ensayo, adyuvante) en lugar
-  de los artículos de resultados, y el agente respondió con honestidad que no tenía datos de
-  supervivencia. El juez penalizó esa frase de «no lo sé», que era correcta.
-- **Dosis de dabrafenib (0,5): error real no detectado.** La búsqueda no trajo la sección de dosis
-  inicial, y las reducciones que dio (1,5 mg, 1 mg) son las de **trametinib**, que aparecen en la
-  misma ficha de la combinación. Ni el juez ni la verificación lo detectaron: un número puede
-  estar en la fuente y aun así referirse a otro fármaco. Además, el verificador marcó «1,5» como
-  sin respaldo porque la fuente escribe «1.5»; ese fallo del verificador ya está corregido.
-- **Ensayos activos con relatlimab (0,29): los 7 ensayos son correctos** (comprobado con SQL); el
-  juez marcó los títulos como no respaldados, probablemente porque solo ve los primeros 9 000
-  caracteres de las fuentes.
+- **Resistance mechanisms to BRAF inhibitors (0.60):** the answer is a reasonable summary, but
+  the judge flagged a few mechanisms (e.g. alternative survival pathways) as not literally
+  stated in the 4 cited abstracts. It is a case of the model generalizing beyond its sources.
+- **COLUMBUS (0.50): search failure.** It retrieved COLUMBUS-AD (a different, adjuvant trial)
+  instead of the results papers, and the agent honestly answered that it had no survival data.
+  The judge penalized that "I don't know" sentence, which was correct.
+- **Dabrafenib dose (0.75, relevance 2): search failure.** The search did not bring the
+  starting-dose section, only the dose-reduction table, and the agent said so instead of
+  guessing. In an earlier run the same question produced a real error: the reductions it gave
+  (1.5 mg, 1 mg) were those of **trametinib**, which appear in the same label of the
+  combination, and neither the judge nor the verification caught it, because a number can be in
+  the source and still refer to another drug.
+- **Active trials with relatlimab (earlier run: 0.29, now 1.00):** the 7 trials were correct
+  both times (checked with SQL); the difference is the judge, which in the earlier run flagged
+  the titles as unsupported, probably because it only sees the first 9,000 characters of the
+  sources. The judge is not stable from run to run.
 
-Conclusión: el agente no inventa fuentes ni cifras, y dice cuando no sabe; sus fallos vienen
-sobre todo de **la búsqueda** (trae el documento equivocado) y de atribuir un dato a un fármaco
-vecino. El LLM juez es útil como alarma, pero se equivoca en ambos sentidos.
+Conclusion: the agent does not invent sources or figures, and says when it does not know; its
+failures come mostly from **search** (it brings the wrong document) and from attributing a
+figure to a neighboring drug. The LLM judge is useful as an alarm, but it is wrong in both
+directions.
 
-Cuota de Groq: 8 000 tokens por minuto. El evaluador espera 25 s entre preguntas y el cliente
-reintenta y cambia a un modelo de respaldo cuando llega al límite.
+Groq quota: 8,000 tokens per minute. The evaluator waits 25 s between questions and the client
+retries and switches to a fallback model when it reaches the limit; those waits are why the
+mean time per answer is higher than in normal use.
 
-**PDFs de congresos** (`make pdfs`): cada página se convierte a texto con `pymupdf4llm`, se
-trocea y se indexa con su número de página, congreso, año y fármacos detectados, de modo que
-la cita puede decir «ESMO 2025, p. 3». Probado de punta a punta con un PDF de ejemplo; la
-carpeta está vacía hasta que se añadan los PDFs reales.
+**Congress PDFs** (`make pdfs`): each page is converted to text with `pymupdf4llm`, chunked and
+indexed with its page number, congress, year and detected drugs, so the citation can say "ESMO
+2025, p. 3". Tested end to end with a sample PDF; the folder is empty until real PDFs are added.
 
-## Limitaciones y siguientes pasos
+## Limitations and next steps
 
-- **Medir el extractor de IA** (fase 2) contra 30-50 abstracts anotados a mano.
-- **Revisar el conjunto de evaluación sintético** y añadir preguntas reales de analistas.
-- **El juez de fidelidad es el mismo modelo que responde**, así que tiende a ser indulgente;
-  lo ideal es un juez distinto y una muestra revisada por una persona.
-- **Cuota gratuita de Groq:** 8 000 tokens por minuto. Con varios usuarios a la vez haría falta
-  un plan de pago o un modelo local.
-- `trial_drugs` incluye fármacos usados como **comparador**, no solo el experimental.
-- ChEMBL (más sinónimos y fármacos) y bge-m3 (tercer modelo de embeddings) quedan opcionales.
+- **Measure the AI extractor** (phase 2) against 30-50 hand-annotated abstracts.
+- **Review the synthetic evaluation set** and add real analyst questions.
+- **The faithfulness judge is the same model that answers**, so it tends to be lenient; ideally
+  use a different judge and a human-reviewed sample.
+- **Groq free quota:** 8,000 tokens per minute. With several simultaneous users a paid plan or
+  a local model would be needed.
+- `trial_drugs` includes drugs used as a **comparator**, not only the experimental one.
+- ChEMBL (more synonyms and drugs) and bge-m3 (third embedding model) remain optional.
 
 ---
 
-# Glosarios
+# Glossaries
 
-## Glosario técnico
+## Technical glossary
 
-| Término | Significado |
+| Term | Meaning |
 |---|---|
-| API | Forma que ofrece un sitio web para que un programa le pida datos |
-| Paginación | Repartir un resultado grande en trozos («páginas») |
-| JSON | Formato de texto para guardar datos estructurados |
-| Pipeline | Cadena de pasos: descargar → limpiar → guardar → consultar |
-| Base relacional | Datos en tablas con filas y columnas, consultables con SQL |
-| Base vectorial | Guarda el significado de un texto como números para buscar por parecido |
-| Tabla de cruce | Tabla que enlaza dos tablas («este ensayo usa este fármaco») |
-| Embedding | Texto convertido en una lista de números que representa su significado |
-| Token | Trozo de palabra que lee un modelo; los límites de longitud se miden en tokens |
-| Chunk | Fragmento de un texto largo, del tamaño que cabe en el modelo |
-| LLM | Modelo de lenguaje (tipo ChatGPT) |
-| Alucinación | Cuando un LLM inventa algo que no está en la fuente |
-| RAG | Que el LLM conteste usando documentos buscados antes, y los cite |
-| Pydantic | Librería que valida que un dato tenga el formato esperado |
-| Docker | Programa que ejecuta servicios (como Postgres) sin instalarlos a mano |
-| BM25 | Búsqueda por palabras exactas que da más peso a las palabras raras |
-| Búsqueda híbrida | Combinar búsqueda por palabras (BM25) y por significado (embeddings) |
-| Reranker (cross-encoder) | Modelo que lee pregunta y texto juntos para reordenar los resultados |
-| Recall@k / MRR | % de veces que el resultado correcto sale entre los k primeros / premio por salir arriba |
-| Agente | LLM que decide qué herramientas usar (SQL, búsqueda) para responder |
-| LangGraph | Librería para definir un agente como un grafo de pasos |
-| API REST | Forma estándar de ofrecer funciones por HTTP (`GET /trials`) |
-| MCP | Protocolo para que un agente de IA descubra y use herramientas externas |
-| LLM como juez | Usar un LLM para puntuar respuestas de otro (útil, pero con sesgos) |
+| API | The way a website lets a program request data from it |
+| Pagination | Splitting a large result into pieces ("pages") |
+| JSON | Text format for storing structured data |
+| Pipeline | Chain of steps: download → clean → store → query |
+| Relational database | Data in tables with rows and columns, queryable with SQL |
+| Vector database | Stores the meaning of a text as numbers to search by similarity |
+| Junction table | Table that links two tables ("this trial uses this drug") |
+| Embedding | Text converted into a list of numbers that represents its meaning |
+| Token | Piece of a word that a model reads; length limits are measured in tokens |
+| Chunk | Fragment of a long text, of a size that fits the model |
+| LLM | Language model (like ChatGPT) |
+| Hallucination | When an LLM makes up something that is not in the source |
+| RAG | Having the LLM answer using documents searched beforehand, and cite them |
+| Pydantic | Library that validates that a value has the expected format |
+| Docker | Program that runs services (like Postgres) without installing them by hand |
+| BM25 | Exact-word search that gives more weight to rare words |
+| Hybrid search | Combining word search (BM25) and meaning search (embeddings) |
+| Reranker (cross-encoder) | Model that reads question and text together to reorder results |
+| Recall@k / MRR | % of times the correct result is in the top k / reward for appearing near the top |
+| Agent | LLM that decides which tools to use (SQL, search) to answer |
+| LangGraph | Library to define an agent as a graph of steps |
+| REST API | Standard way of offering functions over HTTP (`GET /trials`) |
+| MCP | Protocol for an AI agent to discover and use external tools |
+| LLM as a judge | Using an LLM to score another's answers (useful, but biased) |
 
-## Glosario médico y científico
+## Medical and scientific glossary
 
-**La enfermedad**
+**The disease**
 
-| Término | Significado |
+| Term | Meaning |
 |---|---|
-| Melanoma | Cáncer de los melanocitos (células que producen melanina). El cutáneo es el más común; el uveal (ojo) se comporta distinto |
-| Metastásico / irresecable | Extendido a otros órganos (estadio IV) o no operable |
-| Adyuvante / neoadyuvante | Tratamiento después / antes de la cirugía para evitar la recaída |
-| Línea de tratamiento | 1.ª línea = primer tratamiento; 2.ª = el que sigue cuando el primero falla |
+| Melanoma | Cancer of melanocytes (cells that produce melanin). The cutaneous type is the most common; uveal (eye) behaves differently |
+| Metastatic / unresectable | Spread to other organs (stage IV) or not operable |
+| Adjuvant / neoadjuvant | Treatment after / before surgery to prevent relapse |
+| Treatment line | 1st line = first treatment; 2nd = the one that follows when the first fails |
 
-**Fármacos y mecanismos**
+**Drugs and mechanisms**
 
-| Término | Significado |
+| Term | Meaning |
 |---|---|
-| BRAF V600E/K | Mutación que deja la proteína BRAF «siempre encendida»; presente en ~50 % de los melanomas |
-| MEK | Proteína siguiente a BRAF en la misma vía de señal (MAPK) |
-| Inhibidor BRAF (`-fenib`) | encorafenib, dabrafenib, vemurafenib |
-| Inhibidor MEK (`-metinib`) | binimetinib, trametinib, cobimetinib |
-| Terapia dirigida | Ataca una mutación concreta; rápida, pero el tumor se vuelve resistente |
-| Inmunoterapia | Libera los «frenos» (checkpoints) de los linfocitos T: anti-PD-1 (pembrolizumab, nivolumab), anti-CTLA-4 (ipilimumab), anti-LAG-3 (relatlimab) |
-| `-mab` | Anticuerpo monoclonal |
-| INN / marca / código | Nombre genérico (pembrolizumab) / comercial (Keytruda) / de desarrollo (MK-3475) |
+| BRAF V600E/K | Mutation that leaves the BRAF protein "always on"; present in ~50% of melanomas |
+| MEK | Protein downstream of BRAF in the same signaling pathway (MAPK) |
+| BRAF inhibitor (`-fenib`) | encorafenib, dabrafenib, vemurafenib |
+| MEK inhibitor (`-metinib`) | binimetinib, trametinib, cobimetinib |
+| Targeted therapy | Attacks a specific mutation; fast, but the tumor becomes resistant |
+| Immunotherapy | Releases the "brakes" (checkpoints) of T cells: anti-PD-1 (pembrolizumab, nivolumab), anti-CTLA-4 (ipilimumab), anti-LAG-3 (relatlimab) |
+| `-mab` | Monoclonal antibody |
+| INN / brand / code | Generic name (pembrolizumab) / commercial name (Keytruda) / development code (MK-3475) |
 
-**Ensayos clínicos**
+**Clinical trials**
 
-| Término | Significado |
+| Term | Meaning |
 |---|---|
-| Fase 1 / 2 / 3 / 4 | Seguridad y dosis / señal de eficacia / comparación con el estándar / vigilancia tras la aprobación |
-| Intervencional / observacional | Se asigna un tratamiento / solo se observa (no tiene fase) |
-| RCT | Ensayo aleatorizado y controlado; la evidencia más fuerte |
-| Patrocinador (sponsor) | Quien financia: `INDUSTRY` (farmacéutica), `NIH`, `OTHER` (hospitales, universidades) |
-| Estados | `RECRUITING`, `COMPLETED`, `TERMINATED` (parado antes), `WITHDRAWN` (nunca empezó), `UNKNOWN` |
-| Endpoint | La medida principal que el ensayo quiere demostrar |
-| NCT | Identificador de un ensayo en ClinicalTrials.gov |
+| Phase 1 / 2 / 3 / 4 | Safety and dose / efficacy signal / comparison with the standard / post-approval surveillance |
+| Interventional / observational | A treatment is assigned / only observed (has no phase) |
+| RCT | Randomized controlled trial; the strongest evidence |
+| Sponsor | Whoever funds it: `INDUSTRY` (pharma company), `NIH`, `OTHER` (hospitals, universities) |
+| Statuses | `RECRUITING`, `COMPLETED`, `TERMINATED` (stopped early), `WITHDRAWN` (never started), `UNKNOWN` |
+| Endpoint | The primary measure the trial wants to demonstrate |
+| NCT | Identifier of a trial in ClinicalTrials.gov |
 
-**Medidas de eficacia**
+**Efficacy measures**
 
-| Sigla | Significado |
+| Acronym | Meaning |
 |---|---|
-| OS | Supervivencia global: cuánto viven los pacientes |
-| PFS | Supervivencia libre de progresión: tiempo hasta que la enfermedad avanza o el paciente muere |
-| ORR | Tasa de respuesta objetiva: % de pacientes cuyo tumor se reduce (RECIST: ≥ 30 %) |
-| HR | Hazard ratio: HR 0,7 = 30 % menos riesgo del evento en un grupo frente al otro |
+| OS | Overall survival: how long patients live |
+| PFS | Progression-free survival: time until the disease progresses or the patient dies |
+| ORR | Objective response rate: % of patients whose tumor shrinks (RECIST: ≥ 30%) |
+| HR | Hazard ratio: HR 0.7 = 30% lower risk of the event in one group versus the other |
 
-**Literatura y fichas**
+**Literature and labels**
 
-| Término | Significado |
+| Term | Meaning |
 |---|---|
-| PMID / DOI | Identificador en PubMed / identificador permanente de cualquier publicación |
-| Preprint | Artículo sin revisión por pares (en Europe PMC, `PPR`) |
-| Case report | Caso de un solo paciente; evidencia débil |
-| Review | Resumen de la literatura existente |
-| MeSH | Vocabulario oficial de temas médicos de PubMed |
-| Ficha técnica (label) | Documento oficial de la FDA: indicaciones, contraindicaciones, reacciones adversas, estudios clínicos |
+| PMID / DOI | PubMed identifier / permanent identifier of any publication |
+| Preprint | Paper without peer review (in Europe PMC, `PPR`) |
+| Case report | Single-patient case; weak evidence |
+| Review | Summary of the existing literature |
+| MeSH | PubMed's official vocabulary of medical subjects |
+| Label | Official FDA document: indications, contraindications, adverse reactions, clinical studies |

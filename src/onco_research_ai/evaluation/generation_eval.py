@@ -32,9 +32,9 @@ QUESTIONS = [
         [["8"]],
     ),
     (
-        "How many clinical trials of the tracked drugs are sponsored by Pierre Fabre?",
+        "How many clinical trials of the tracked drugs are sponsored by Bristol-Myers Squibb?",
         "sql",
-        [["8"]],
+        [["73"]],
     ),
     (
         "¿Qué fármaco anti-PD-1 tiene más ensayos de fase 3 y cuántos?",

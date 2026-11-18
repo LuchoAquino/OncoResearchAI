@@ -37,7 +37,7 @@ def main() -> None:
     page2 = fetch_page(params, skip=5)
     show(page2)
 
-    # 2) Una ficha concreta: el fármaco de Pierre Fabre
+    # 2) Una ficha concreta: un fármaco de referencia
     enc = fetch_page(
         {"search": 'openfda.generic_name:"encorafenib"', "limit": 1}, skip=0
     )
